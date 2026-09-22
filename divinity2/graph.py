@@ -168,7 +168,7 @@ def _named(node) -> str:
     return "" if name.strip().lower() in ANONYMOUS else name
 
 
-def walk(root, keep_hidden: bool = True):
+def walk(root):
     """Every shape under `root`, in file order, with its state resolved.
 
     A shape the game never draws is not yielded at all: culled subtrees and

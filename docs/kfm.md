@@ -53,6 +53,5 @@ unread tail **no set loses a `.kf` reference**.
 
 ## What it is used for
 
-- the family's skeleton, instead of assuming `Skeleton.nif` in the folder;
 - the `.kf` files a character actually uses, instead of scraping filenames
   out of the bytes with a regular expression.

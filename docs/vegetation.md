@@ -203,8 +203,8 @@ all fourteen read with no special case:
 | … and four more | | | | |
 | **all of them** | | | | **523,223** |
 
-Five seconds for the lot, which is why the whole sweep is a test rather than a
-one-off.
+Five seconds for the lot, so the whole sweep is cheap to run again after any
+change.
 
 ## What is ours, not the game's
 

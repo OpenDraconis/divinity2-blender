@@ -16,7 +16,7 @@ from bpy.types import AddonPreferences, Operator, Panel
 from ..blender.importer import import_asset
 from ..blender.region import ALL, KINDS, import_region
 from ..divinity2 import catalog, docs, region
-from ..vendor.dv2lib import locate, unpack
+from dv2lib import locate, unpack
 
 PACKAGE = __package__.rpartition(".")[0]
 
@@ -24,8 +24,10 @@ PACKAGE = __package__.rpartition(".")[0]
 def _game_root(context) -> str:
     prefs = context.preferences.addons[PACKAGE].preferences
     # Every entry point asks for the game first, so the documents are
-    # registered here once rather than in each operator.
-    docs.use(prefs.game_root)
+    # registered here once rather than in each operator. Another folder
+    # starts over: the old one must not keep answering first.
+    if prefs.game_root and docs.ROOTS[:1] != [Path(prefs.game_root)]:
+        docs.begin(prefs.game_root)
     return prefs.game_root
 
 

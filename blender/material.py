@@ -188,7 +188,7 @@ class _Graph:
 
 
 def build_material(drawn, game_root: Path, cache: Path, source=None, standard_data: bool = False,
-                   entry: dict | None = None):
+                   entry: dict | None = None, for_unity: bool = False):
     """One material per drawable, from the engine's description of it.
 
     The property state comes from the walk, not from the shape: Gamebryo
@@ -202,8 +202,9 @@ def build_material(drawn, game_root: Path, cache: Path, source=None, standard_da
     # Gamebryo names split shapes `Name:0`; FBX treats `:` as a namespace, and
     # Unity's importer hands the material over as `Name_0` (measured: all 110 of
     # Banditcamp Main's 567 materials with a colon). The exported table keys on
-    # this name, so it is made the same on both sides here.
-    material = bpy.data.materials.new((drawn.name or "material").replace(":", "_"))
+    # this name, so for Unity it is made the same on both sides here.
+    name = drawn.name or "material"
+    material = bpy.data.materials.new(name.replace(":", "_") if for_unity else name)
     material["dv2_material"] = json.dumps(desc)
     # The engine culls unless the shape says to draw both faces.
     material.use_backface_culling = not desc["two_sided"]

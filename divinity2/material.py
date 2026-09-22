@@ -63,11 +63,6 @@ class Alpha:
     def additive(self) -> bool:
         return self.blending and self.source == "ONE" and self.destination == "ONE"
 
-    @property
-    def transparent(self) -> bool:
-        """Does anything here make the surface see-through?"""
-        return self.blending or self.testing
-
 
 def _name(table, index: int, fallback: str) -> str:
     return table[index] if 0 <= index < len(table) else fallback

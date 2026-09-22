@@ -6,18 +6,20 @@ under the terms of the GNU General Public License as published by the Free
 Software Foundation, either version 3 of the License, or (at your option)
 any later version. See LICENSE for the full text.
 
-It reads the assets of Divinity II: Ego Draconis and Divinity II: Developer's
-Cut (Larian Studios, 2009). It ships none of them, and it is not endorsed by
-or affiliated with Larian Studios. You need your own copy of the game.
+It reads the assets of Divinity II: Developer's Cut (Larian Studios, 2009).
+It ships none of them, and it is not endorsed by or affiliated with Larian
+Studios. You need your own copy of the game.
 
 
 Third-party code
 ----------------
 
-wheels/nifgen-2026.9.15-py3-none-any.whl
+wheels/nifgen-2026.9.15+dv2-py3-none-any.whl
     A Python reader for the NetImmerse/Gamebryo file formats, generated from
-    the NifTools project's `nif.xml` format specification. Bundled unchanged,
-    as a wheel built from the generated sources.
+    the NifTools project's `nif.xml` format specification. The generated
+    sources are unchanged; the wheel holds only the NIF reader and the modules
+    it imports (`formats/nif`, `formats/base`, `formats/dds`, `utils`), and
+    not `utils/mopper.exe`, which only writes collision data.
 
     Copyright (C) 2005, NIF File Format Library and Tools contributors.
     All rights reserved.
@@ -27,10 +29,10 @@ wheels/nifgen-2026.9.15-py3-none-any.whl
     https://github.com/niftools/nifgen
     https://github.com/niftools/nifxml
 
-vendor/dv2lib
+wheels/divinity2_lib-0.2.0-py3-none-any.whl
     divinity2-lib, the Divinity II archive, binary XML and name table readers.
     Copyright (c) 2026 ygalsk. Licensed under the MIT License; the full text
-    is in vendor/dv2lib/LICENSE. Vendored unchanged.
+    is in divinity2_lib-0.2.0.dist-info/licenses/LICENSE inside the wheel.
 
     https://github.com/ygalsk/divinity2-lib
 

@@ -1,10 +1,9 @@
 """The game's documents, as the unpack hands them over.
 
 Most of this game's `.xml` files are not text: they are a tree with every name
-replaced by a 32-bit hash, packed into a NIF container. `vendor/dv2lib` reads
-them and names them -- the one place a name is ever recovered, taken from
-dv2mod -- and writes each one as plain JSON under `docs/<archive path>.json`
-when the game is unpacked (the preferences' button, or
+replaced by a 32-bit hash, packed into a NIF container. divinity2-lib (`dv2lib`,
+bundled as a wheel) reads them and names them, then writes each one as plain JSON
+under `docs/<archive path>.json` when the game is unpacked (the preferences' button, or
 `python -m dv2lib unpack <folder>`).
 
 This reads that JSON back. A tree is `{"name", "attrs", "text"?, "children"?}`,
@@ -104,8 +103,8 @@ def glob(game_root, pattern: str) -> list:
     """Every document a folder holds whose archive path matches `pattern`, as the
     path it has under `game_root`. `*` crosses folders, as `fnmatch` has it.
 
-    A region bundle holds only its own documents, so asking it lists what dv2mod
-    said belongs to the region; an unpacked game lists what the game ships.
+    A region bundle holds only its own documents, so asking it lists what the
+    bundle contains; an unpacked game lists what the game ships.
     """
     want = pattern.lower()
     found = {}

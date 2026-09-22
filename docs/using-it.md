@@ -60,7 +60,7 @@ Names follow the game's own prefixes, which is the fastest way to browse:
 The second button builds a level: the ground, every prop, every person, the
 lights and the triggers, in one go.
 
-- **Region** lists the 19 the game ships; **Sub-region** its interiors.
+- **Region** lists the 21 the game declares; **Sub-region** its interiors.
 - **Time of day** picks which `Lights` folder to read — the sun and the lamps
   are authored three times.
 - The tick boxes choose what to build. Triggers and grass are off by default:
@@ -74,9 +74,10 @@ working on. A hidden `Banditcamp Main models` collection holds one copy of each
 model; every placement in the scene is a linked copy of it, so Banditcamp/Main's
 732 scenery placements share 194 meshes.
 
-Everything the game's files said is kept on the object as a custom property:
-`dv2_uuid`, `dv2_kind`, `dv2_prototype`, `dv2_path`, and for a tree its
-`dv2_model` and `dv2_spt`. Nothing is dropped on the way in.
+Everything the game's files said is kept on the object as custom properties:
+`dv2_kind`, `dv2_uuid`, and the whole record as JSON in `dv2_fields` (a tree's
+model and SpeedTree file among it); a built mesh carries its `dv2_path`.
+Nothing is dropped on the way in.
 
 Banditcamp/Main with grass, measured with the add-on installed from its zip
 into an empty Blender 5.2 profile: 190 models, 75 pieces of ground and built
@@ -100,8 +101,9 @@ Everything arrives in metres, and everything is in the same world: a goblin is
 wall 15.7 m long. Import a character and a door together and the character
 fits through the door.
 
-Materials are Principled BSDF with the game's diffuse and normal map wired in,
-and transparency honoured: a cut-out surface like hair or a leaf uses alpha
+Materials are a Diffuse BSDF with the game's diffuse and normal map wired in,
+plus an emission term for what the engine lights by itself (water gets a
+Principled BSDF), and transparency honoured: a cut-out surface like hair or a leaf uses alpha
 clipping, a blended one blends, an additive one casts no shadow.
 
 Two more things the file says about a surface are honoured, and both are
@@ -110,8 +112,9 @@ mostly decided by what the file *does not* say:
 - **Vertex colours.** A shape's colours are always written onto the mesh as a
   `RGBA` colour attribute, so nothing is lost. Whether they are drawn is the
   shape's own `NiVertexColorProperty`: most scenery says to ignore them, and a
-  shape with no such property uses them, which is `nif.xml`'s stated default
-  and is what the regions' built geometry relies on.
+  shape with no such property anywhere above it ignores them too -- the
+  engine's default (`NiPropertyState`), not `nif.xml`'s "if not present"
+  default, which is the exporter's convention.
 - **Two-sidedness.** Back faces are culled unless the shape carries a
   `NiStencilProperty`, which in this game only ever says `DRAW_BOTH`. Banners,
   flags, bushes and water plants have it; walls do not.

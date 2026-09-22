@@ -76,7 +76,7 @@ def read(root, region: str, sub: str = "Main", time: str = "") -> dict:
     from . import region as dv2_region          # circular only at import time
 
     root = Path(root)
-    here = dv2_region._folder(root, region, sub)
+    here = dv2_region.folder(root, region, sub)
     # A sub-region need not list every hour -- see `region.time_setting`.
     time = dv2_region.time_setting(root, region, sub, time)
 

@@ -39,8 +39,8 @@ baked flat for distance; the game fades to it past `splatdistance`.
 Two extensions lie in this chain and both were measured, not assumed: a
 `MegaTexture` named `.dds` is a NIF like every other texture in this game, and
 an `AlphaMap` named `.tga` is a `.dds` on disk, which is also a NIF.
-`Terrain.xml` itself is Larian's binary XML, read through dv2mod -- see
-`divinity2.docs`.
+`Terrain.xml` itself is Larian's binary XML, read through the shared reader --
+see `divinity2.docs`.
 """
 
 import re
@@ -49,17 +49,11 @@ from pathlib import Path
 
 from . import docs, lod, nif
 
-#: The node a region's terrain hangs under.
-ROOT_NODE = "[--WorldProcessedTerrain--]"
-
 #: Where the region keeps its own pictures, beside `StaticMeshes.nif`.
 TEXTURE_DIR = "TerrainTextures"
 
 #: What the file calls the descriptor.
 DESCRIPTOR = "Terrain.xml"
-
-#: `MaskIndex` 0..3 is the alpha map's red, green, blue, alpha channel.
-CHANNELS = ("R", "G", "B", "A")
 
 _PATCH = re.compile(r"Terrain_Patch_(\d+)")
 
@@ -237,12 +231,6 @@ def splat(model_path, options=GRAPHIC_OPTIONS) -> dict:
     if options.get("StaticAssetHighQuality"):
         radius = 2000.0
     return {"radius": radius, "blend": number("splatblenddistance", 25.0)}
-
-
-def megatexture(model_path, index: int) -> Path | None:
-    """The baked diffuse for one patch."""
-    patch = patches(model_path).get(index)
-    return patch.megatexture if patch else None
 
 
 # ------------------------------------------------------------ the streamed levels

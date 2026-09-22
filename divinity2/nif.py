@@ -14,11 +14,6 @@ upstream, not here.
 import sys
 from pathlib import Path
 
-#: Divinity II's NIF version, as `nif.xml` states it.
-NIF_VERSION = 0x14030009
-#: The two user versions that mark the Divinity 2 variant of that version.
-USER_VERSIONS = (0x20000, 0x30000)
-
 _WHEELS = Path(__file__).resolve().parent.parent / "wheels"
 
 
@@ -52,7 +47,3 @@ def read_nif(path: str | Path):
 #: before drawing. The engine never reads it as a unit, and neither do we.
 UNITS_PER_METRE = 100.0
 
-
-def is_divinity2(nif) -> bool:
-    """Is this the Divinity 2 dialect, rather than another Gamebryo game?"""
-    return nif.version == NIF_VERSION and nif.user_version in USER_VERSIONS

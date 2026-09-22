@@ -25,7 +25,6 @@ import re
 USER_PROP = "UserPropBuffer"
 
 _LEVEL = re.compile(r"NiBoneLOD#\w+#(\d+)#")
-_DISTANCE = re.compile(r"LODDistance\s*=\s*([0-9.]+)")
 
 #: The level the game shows at close range.
 NEAREST = 0
@@ -61,11 +60,6 @@ def level_of(shape) -> int | None:
     """The shape's LOD level, or None when it is not in a LOD group."""
     match = _LEVEL.search(_user_prop(shape))
     return int(match.group(1)) if match else None
-
-
-def distance_of(shape) -> float | None:
-    match = _DISTANCE.search(_user_prop(shape))
-    return float(match.group(1)) if match else None
 
 
 def is_hidden(shape) -> bool:

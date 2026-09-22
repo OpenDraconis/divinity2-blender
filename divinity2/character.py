@@ -75,12 +75,6 @@ class Character:
     clips: list[Clip] = field(default_factory=list)
     animation_set: bytes = b""  # a KFM without its header
 
-    def clip(self, name: str) -> Clip | None:
-        for c in self.clips:
-            if c.name == name:
-                return c
-        return None
-
 
 def _kind(block) -> str:
     return type(block).__name__.split("::")[-1]
@@ -183,18 +177,20 @@ def model_manager(path: str | Path) -> dict:
     - `templates`: each `CModelTemplate`'s slot assignments, template name in
       lower case -> the entry names it assigns (u32 name, u32, u32 prototype,
       u32 properties, u32 count, then count pairs of sized strings, slot and
-      entry; `dv2mod.core.nifpatch.read_model_template`, which round-trips).
+      entry; the focused NIF reader round-trips it).
     - `meshes`: each `CMesh` block's name in lower case -> the entries it links
       (u32 source file, u32 name, u8, u32 slot hash, u32 count, then count pairs
-      of u32 hash and a block link; `nifpatch.read_mesh`). Measured: the links
-      resolve to `CMeshEntry` blocks, and `Pig` links `Pig_Body_A`, the entry
-      `Pig_A`'s template assigns, where the part's own file is `Pig.nif`.
+      of u32 hash and a block link; `nifpatch.read_mesh` in divinity2-research).
+      Measured: the links resolve to `CMeshEntry` blocks, and `Pig` links
+      `Pig_Body_A`, the entry `Pig_A`'s template assigns, where the part's own
+      file is `Pig.nif`.
 
-    nifgen has no such blocks, so the header is walked as
-    `dv2mod.core.nifpatch.parse_header` walks it. Empty when the file is not there.
+    nifgen has no such blocks, so the header is walked by the focused NIF
+    reader. Empty when the file is not there.
     """
     path = Path(path)
-    out = {"entries": {}, "templates": {}, "meshes": {}}
+    out = {"entries": {}, "templates": {}, "meshes": {}, "groups": {}, "descriptors": {},
+           "prototypes": {}, "template_models": {}, "enums": {}}
     if not path.is_file():
         return out
     data = path.read_bytes()
@@ -224,16 +220,54 @@ def model_manager(path: str | Path) -> dict:
             names[index] = text(name)
             out["entries"][text(name).lower()] = {"name": text(name), "texture_base": text(base),
                                                   "extra_data": text(extra), "search": bool(data[start + 12])}
-    for kind, start in zip(kinds, starts):
+    sized = lambda at: (data[at + 4:at + 4 + u32(at)].rstrip(b"\0").decode("latin-1"),  # noqa: E731
+                        at + 4 + u32(at))                  # a SizedString, and the cursor behind it
+    for index, (kind, start) in enumerate(zip(kinds, starts)):
         kind = types[kind & 0x7FFF]
-        if kind == "CModelTemplate":
+        # The model side of the same file: which KFM (animation set) a model may play.
+        # `CModelPrototype` holds the `CKFMDescriptor`s, each with a `CPropertyGroup` of masks over the
+        # `CStringMapper`'s enums (`CollectKFMDescriptors` @0x6c8950; divinity2-port's notes, character-animation.md 1).
+        if kind == "CPropertyGroup":
+            out["groups"][index] = {u32(start + 4 + 12 * i): struct.unpack_from("<Q", data, start + 8 + 12 * i)[0]
+                                    for i in range(u32(start))}
+        elif kind == "CKFMDescriptor":
+            out["descriptors"][index] = {"kfm": text(u32(start)), "properties": u32(start + 4)}
+        elif kind == "CModelPrototype":
+            at = start + 16
+            at += 4 + 12 * u32(at)                             # the LOD levels
+            at += 4 + 4 * u32(at)                              # the slot keys
+            at += 4 + 8 * u32(at)                              # the slot names
+            out["prototypes"][index] = {
+                "name": text(u32(start)),
+                "properties": u32(start + 12),
+                "animation_sets": [u32(at + 4 + 4 * i) for i in range(u32(at))],
+            }
+        elif kind == "CStringMapper":
+            at = start + 4
+            for _ in range(u32(start)):                        # the slot names
+                at = sized(at)[1] + 4
+            keys, count, at = {}, u32(at), at + 4              # every property key: a name, then its hash
+            for _ in range(count):
+                name, at = sized(at)
+                keys[u32(at)] = name
+                at += 4
+            count, at = u32(at), at + 4
+            for _ in range(count):                             # one enum: its key, then its values
+                key, values, at = u32(at), u32(at + 4), at + 8
+                ordinals = {}                                  # not `names`: that one holds the entries
+                for _ in range(values):                        # name, then the ordinal as 64 bits
+                    name, at = sized(at)
+                    ordinals[name] = u32(at)
+                    at += 8
+                out["enums"][keys.get(key, key)] = {"key": key, "values": ordinals}
+        elif kind == "CModelTemplate":
             name, count = u32(start), u32(start + 16)
+            out["template_models"][text(name).lower()] = {"prototype": u32(start + 8),
+                                                          "properties": u32(start + 12)}
             pos, assigned = start + 20, set()
             for _ in range(count):
-                pos += 4 + u32(pos)                            # the slot
-                n = u32(pos)
-                entry = data[pos + 4:pos + 4 + n].rstrip(b"\0").decode("latin-1")
-                pos += 4 + n
+                pos = sized(pos)[1]                            # the slot
+                entry, pos = sized(pos)
                 if entry:
                     assigned.add(entry)
             out["templates"].setdefault(text(name).lower(), set()).update(assigned)

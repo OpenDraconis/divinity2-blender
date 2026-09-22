@@ -31,12 +31,13 @@ Episodes/<e>/Triggers/*.xml           volumes and points, by Region/SubRegion
 World/<region>/<sub>/Lights/<time>/lights.xml    point lights and one sun
 World/<region>/<sub>/trees.xml        SpeedTree placements
 World/<region>/<sub>/StaticMeshes.nif the region's own built geometry
-World/<region>/<sub>/Vegetation.nif   the grass library, unplaced
+World/<region>/<sub>/Vegetation.nif   the grass library; the engine places it (section 11)
 ```
 
 None of the `.xml` files is text. Each is Larian's binary XML inside an
 `xml::dom::CStreamableNode` block in a NIF container — the file carries a
-`.xml` extension and holds neither. dv2mod reads it; see `divinity2/docs.py`.
+`.xml` extension and holds neither. The shared reader handles it; see
+`divinity2/docs.py`.
 
 ## 1. The stream stores a node's children in reverse
 
@@ -295,9 +296,9 @@ no positions at all. Its `WaterPlaneData name` is the node's own name:
 
 Banditcamp is the exception: its planes are named for ponds while its file
 holds only the three stock entries (`Waterplane_River`, `_Fall`, `_Ocean`). A
-plane with no entry of its own takes the first — which is a fallback rather
-than a guess only because **every entry in those files is identical**, and the
-add-on's test asserts exactly that before relying on it.
+plane with no entry of its own is drawn with the constructor's defaults, as the
+engine draws it: `CWaterPlaneDataMan::AddWaterPlane` matches by exact name and
+nothing else (`region.water_style`, `WATER_DEFAULTS`).
 
 ## 11. Vegetation is generated, and the generator is in the binary
 
@@ -377,19 +378,18 @@ heading the run itself gives: `t18 → t20` is `(−11.06, +0.05)`), the rock
 layout matches — dark wall close on the left, open floor to the left of
 centre, a bright face above it, rock masses right. A counter-render facing
 `+X` shows a different place entirely, which is what makes the match mean
-something. What differs is ground cover: the game's grass and its trees are
-absent, both by design (sections 9 and 11). Nothing in the comparison is
+something. What differs is ground cover: the render had no grass, which the
+add-on has generated since (section 11), and trees are markers (section 9). Nothing in the comparison is
 explained by geometry being wrong.
 
 ## What is still open
 
 - **Three of the ten numbers on a water plane.** `waterplanedata_v2.xml`
-  stores attribute names as hashes, and seven were recovered by hashing
-  candidates until they matched — `wavestrength`, `wavesize`, `wavespeed`,
-  `fresneloffset`, `lodstrength`, `sunstrength`, `texscale`, all lower case.
-  `0xab083eab`, `0xc320b415` and `0x7b084ff6` are not resolved. None of them
-  is needed to draw the surface, and the engine's own symbols would settle
-  them in one query.
+  stores attribute names as hashes, and all ten are recovered now:
+  `wavestrength`, `wavesize`, `wavespeed`, `fresneloffset`, `lodstrength`,
+  `sunstrength`, `texscale`, and `fogmodifier`, `alphamodifier`, `lodstepsize`
+  (divinity2-lib's name table). What the last three do to the surface is not
+  read yet; none of them is needed to draw it.
 - **The turn a plant is given.** `CVeggyInstance::m_fRotation` is 0..1 and the
   shader that reads it is compiled HLSL. One full turn is our reading, and
   the only step of the vegetation chain that is not proven.

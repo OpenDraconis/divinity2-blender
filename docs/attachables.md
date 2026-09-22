@@ -50,8 +50,15 @@ names:
 same positions as its `Bone_Weapon_01` and `Bone_Weapon_03`: artist aliases,
 not a second system.
 
-## What was in the files, and was not enough
+No other skeleton has a weapon dummy: `HumanMale` and `HumanFemale`, who carry
+swords, bows, staves and shields, have none at all. A rule built on these names
+looks right on a goblin and is wrong everywhere else.
 
+It is not in the game's data files either. The install carries 4,096 XML
+files and 2,920 Lua scripts; neither mentions a bone. The only `Dummy_` in
+any Lua is a training dummy in the tutorial.
+
+## What was in the files, and was not enough
 
 This is the part worth writing down, because the naming invites a wrong
 answer. Everything was checked:
@@ -61,31 +68,10 @@ answer. Everything was checked:
 | `Attachables\*.nif` | scene root, a node named after the weapon, geometry, and rendering extra data (`worldScale`, `FallOffPower`, `EnableFallOff`, `UseEnvMapping`) | no |
 | the `.cat`'s `CMeshDataEntry` | `name` and `mesh_data_reference`; the two Div2 fields `nif.xml` calls unknown read 2 and 1 on **every** entry, carried or not | no |
 | `Win32/Items/**/*.item` | the same NIF again, plus `swoosh_begin` and `swoosh_end` for the weapon trail, and a `DivStandardMaterial` name | no |
-| the family skeleton | `Dummy_` nodes — see below | for one family out of 47 |
+| the family skeleton | `Dummy_` nodes — see above | for one family out of 46 |
 
 The game decides at runtime, from its equipment rules. The assets do not
 record it.
-
-## What the `Dummy_` nodes actually are
-
-Counted over all 47 family skeletons, they are effect points, not sockets:
-
-| name | what the game hangs on it |
-|---|---|
-| `Dummy_Cast_Primary`, `Dummy_Cast_Secondary` | where a spell leaves the body |
-| `Dummy_Impact_01` … `Dummy_Impact_10` | where a hit registers |
-| `Dummy_Head_Above`, `Dummy_Head_Around` | where a status icon floats |
-| `Dummy_Foot_Left`, `Dummy_Foot_Right` | where footstep dust spawns |
-| `Dummy_1H_Sword`, `Dummy_1H_Sword01` | a grip — **`Froblin` only** |
-
-`Dummy_1H_Sword` exists in exactly one skeleton. `HumanMale` and
-`HumanFemale`, who carry swords, bows, staves and shields, have no weapon
-dummy at all. A rule built on these names looks right on a goblin and is
-wrong everywhere else.
-
-It is not in the game's data files either. The install carries 4,096 XML
-files and 2,920 Lua scripts; neither mentions a bone. The only `Dummy_` in
-any Lua is a training dummy in the tutorial.
 
 ## What the add-on does
 

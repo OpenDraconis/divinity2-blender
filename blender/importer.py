@@ -40,11 +40,11 @@ def import_asset(
     path,
     game_root,
     cache=None,
-    scale=None,
     with_animation: bool = True,
     shared_clips: bool = True,
     extra_clips=(),
     standard_data: bool = False,
+    for_unity: bool = False,
 ) -> Result:
     """Read any model file and build it: armature, meshes, skin, materials, clips.
 
@@ -55,6 +55,10 @@ def import_asset(
     `standard_data`: the model is region geometry, a static asset or terrain,
     which the engine runs through `CShadingTools::SetupStandardData`
     (`divinity2.material.STANDARD_DATA`).
+
+    `for_unity`: build what Unity's FBX importer takes as the game has it, which is not
+    always what the game has (the head and hair below, `build_material`'s names). The
+    Unity port asks for it; in Blender itself the model stays as the engine draws it.
     """
     game_root = Path(game_root)
     cache = Path(cache) if cache else game_root.parent / ".dv2-texture-cache"
@@ -72,7 +76,7 @@ def import_asset(
     if skeleton is not None:
         rest = scene.rest_matrices(skeleton)
         result.armature = scene.build_armature(
-            skeleton, character.name, _factor(skeleton, scale), rest
+            skeleton, character.name, _factor(skeleton), rest
         )
         result.bones = len(result.armature.data.bones)
         result.shared_rig = character.skeleton is None
@@ -90,7 +94,7 @@ def import_asset(
             )
             carried_so_far += 1
 
-        factor = _factor(mesh.root, scale)
+        factor = _factor(mesh.root)
         # A region's terrain stubs are empty until their streamed files are
         # hung under them. Everything else has no manifest and is untouched.
         result.grafted += terrain.graft(mesh.root, path)
@@ -107,7 +111,7 @@ def import_asset(
                 result.hidden_lods += 1
 
             built = dv2_material.build_material(drawn, game_root, cache, path, standard_data,
-                                                 mesh.entry)
+                                                 mesh.entry, for_unity)
             if built is not None:
                 obj.data.materials.append(built)
                 result.materials += 1
@@ -115,8 +119,21 @@ def import_asset(
             if result.armature is None:
                 continue
 
-            if scene.bind_skin(obj, drawn.shape, result.armature):
+            # Human head and hair meshes use a dense facial rig whose bind
+            # data is not represented faithfully by Unity's generic FBX
+            # skin importer. Their vertices are already in the measured
+            # skeleton rest pose (`build_mesh` above), so keep that pose and
+            # carry the pieces with the armature root instead of applying a
+            # second, corrupted facial deformation at runtime.
+            static_face = for_unity and any(token in f"{mesh.name}/{drawn.name}".lower()
+                                            for token in ("head", "hair"))
+            if not static_face and scene.bind_skin(obj, drawn.shape, result.armature):
                 result.skinned += 1
+            elif static_face and result.armature.data.bones.get("Head") is not None \
+                    and scene.attach_rest_mesh_to_bone(obj, result.armature, "Head"):
+                # The facial mesh is already in rest space; follow the head
+                # bone without applying the dense facial skin a second time.
+                result.attached += 1
             elif bone is not None and scene.attach_to_bone(
                 obj, result.armature, bone
             ):
@@ -146,7 +163,7 @@ def import_asset(
         # `EditBone.matrix` keeps the orientation and drops it. So keys always
         # convert by the full unit, never by the tree's factor.
         result.actions = dv2_animation.build_actions(
-            result.armature, clips, 1.0 / (scale or UNITS_PER_METRE)
+            result.armature, clips, 1.0 / UNITS_PER_METRE
         )
         if result.actions:
             first = _resting(result.actions)
@@ -157,7 +174,7 @@ def import_asset(
     return result
 
 
-def _factor(root, scale=None) -> float:
+def _factor(root) -> float:
     """Game units to metres for one node tree.
 
     Every model in the game is authored in centimetres. How many of those
@@ -165,11 +182,8 @@ def _factor(root, scale=None) -> float:
     leaves `Scene Root` at 1.0, and every scenery, item, effect and fortress
     bakes the conversion into it as 0.01. `graph.walk` already applies that
     scale, so the factor must not apply it a second time -- hence the product.
-
-    `scale` overrides the unit, not the root: it is there for a file that
-    turns out to be authored in something else.
     """
-    return 1.0 / ((scale or UNITS_PER_METRE) * float(root.scale))
+    return 1.0 / (UNITS_PER_METRE * float(root.scale))
 
 
 #: What the engine calls the state a character stands in, from its own

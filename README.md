@@ -62,8 +62,8 @@ The full guide is [docs/using-it.md](docs/using-it.md).
   [NifTools](https://github.com/niftools/nifxml) format description
   (BSD-3-Clause), bundled as a wheel.
 - Archives and the game's binary XML are read by
-  [divinity2-lib](https://github.com/ygalsk/divinity2-lib) (MIT), which comes
-  out of the research in [dv2mod](https://github.com/ygalsk/dv2-mod).
+  [divinity2-lib](https://github.com/ygalsk/divinity2-lib) (MIT), bundled as a
+  wheel; `python -m dv2lib unpack` unpacks the game from the command line.
 - Details are in [NOTICE](NOTICE).
 
 This project is not affiliated with or endorsed by Larian Studios. It contains

@@ -32,8 +32,8 @@ metres. The engine's own readers say so --
 `CRpgStats_V2_Scenery::LoadXML`, `CRpgStats_V2_Character::LoadXML`,
 `CRpgStats_V2_Item::LoadXML` and `CGameLogic_Tree::LoadXML` all take
 `children[0]` as the position and `children[1]` as the orientation. The
-binary stream stores children in reverse, and dv2mod undoes that once, for
-everything; see `divinity2.docs`.
+binary stream stores children in reverse, and the shared reader undoes that
+once, for everything; see `divinity2.docs`.
 
 **A trigger is a prism or a point.** `Trigger_area` holds a `PolyArea` with
 `Top` and `Bottom` and a ring of `AreaPoint`s at the bottom height, so the
@@ -60,7 +60,7 @@ file, and `vegetationtemplatedata.xml` names them again with their textures.
 Where each blade stands is generated at load from a seed and a per-cell mask
 (`Vegetation/VM_<x>_<y>.tga`, the names
 `CVegetationGridManager::GenerateVegetationGridEntryDescriptors` scans for).
-That generator is not reproduced here, so the library comes in unplaced.
+`divinity2.vegetation` generates the same field (`docs/vegetation.md`).
 """
 
 from dataclasses import dataclass, field
@@ -73,7 +73,6 @@ from . import docs
 
 #: Where the placement files live, relative to the install.
 WORLD = Path("World")
-EPISODES = Path("Episodes")
 
 #: The table that says which time of day each region is loaded at.
 WORLD_REGIONS = Path("Worldregions.xml")
@@ -157,13 +156,13 @@ def _attrs(node) -> dict:
 
     The whole record, not a chosen subset: a field that is useless to the
     add-on is the one the port needs later, and the file already holds it. A
-    name dv2mod has not recovered is written down as its hash
+    name divinity2-lib has not recovered is written down as its hash
     rather than dropped, so a gap shows up in the table instead of vanishing.
     """
     return node.named()
 
 
-def _record(node, skip=(), prefix: str = "") -> dict:
+def record(node, skip=(), prefix: str = "") -> dict:
     """Everything under a node, not only its own attributes.
 
     A descendant's attribute is written `child.attr`, and a child name that
@@ -183,7 +182,7 @@ def _record(node, skip=(), prefix: str = "") -> dict:
         if any(child is s for s in skip):
             continue
         key = name if names.count(name) == 1 else f"{name}[{index}]"
-        out.update(_record(child, (), f"{prefix}{key}."))
+        out.update(record(child, (), f"{prefix}{key}."))
     return out
 
 
@@ -195,7 +194,7 @@ def _basis(node) -> np.ndarray:
     return np.array([_point(row) for row in node.children], dtype=float)
 
 
-def _placement(node):
+def placement(node):
     """(position, basis, the children they came from) of a placement."""
     position, basis, used = (0.0, 0.0, 0.0), None, []
     for child in node.children:
@@ -208,7 +207,7 @@ def _placement(node):
     return position, basis, used
 
 
-def _folder(root, region: str, sub: str) -> Path:
+def folder(root, region: str, sub: str) -> Path:
     here = Path(root) / WORLD / region
     return here / sub if sub == "Main" else here / "Subregions" / sub
 
@@ -218,7 +217,7 @@ _read = docs.read
 
 
 @lru_cache(maxsize=4)
-def _files(root: Path, under: str, suffix: str) -> dict:
+def files_under(root: Path, under: str, suffix: str) -> dict:
     """Every file of one kind, keyed by its lower-cased relative path.
 
     Larian's own tables disagree with the disk about case, and a Linux
@@ -241,7 +240,7 @@ def _scenery_models(root: Path) -> dict:
     doc = _read(Path(root) / SCENERY_PROTOTYPES)
     if doc is None:
         return {}
-    files = _files(Path(root), str(SCENERY_ROOT), ".item")
+    files = files_under(Path(root), str(SCENERY_ROOT), ".item")
     out = {}
     for node in doc.find_all(SCENERY_ITEM):
         uuid, named = node.get("UUID"), node.get("NIFFile")
@@ -257,7 +256,7 @@ def _scenery_models(root: Path) -> dict:
 
 
 @lru_cache(maxsize=4)
-def _character_models(root: Path) -> dict:
+def character_models(root: Path) -> dict:
     """Visual prototype UUID -> the `.cat` on disk.
 
     A `Visual` gives `PrototypeName` -- the family, `SkeletonHuman` -- and
@@ -266,7 +265,7 @@ def _character_models(root: Path) -> dict:
     visuals; the two that are not are unused Froblin variants.
     """
     root = Path(root)
-    files = _files(root, str(CHARACTER_ROOT), ".cat")
+    files = files_under(root, str(CHARACTER_ROOT), ".cat")
     out = {}
     for table in docs.glob(root, "episodes/*/rpgstats_characterprototypes_visual.xml"):
         doc = _read(table)
@@ -290,7 +289,7 @@ def _item_models(root: Path) -> dict:
     rest are cutscene props the game does not ship.
     """
     root = Path(root)
-    files = _files(root, str(ITEM_ROOT), ".item")
+    files = files_under(root, str(ITEM_ROOT), ".item")
     visuals = {}
     for table in docs.glob(root, "episodes/*/rpgstats_itemvisualprototypes.xml"):
         doc = _read(table)
@@ -317,13 +316,13 @@ def _item_models(root: Path) -> dict:
 # ------------------------------------------------------------- the placements
 
 def _scenery(root: Path, region: str, sub: str) -> list:
-    doc = _read(_folder(root, region, sub) / "scenery.xml")
+    doc = _read(folder(root, region, sub) / "scenery.xml")
     if doc is None:
         return []
     models = _scenery_models(Path(root))
     out = []
     for node in doc.find_all("Scenery"):
-        position, basis, used = _placement(node)
+        position, basis, used = placement(node)
         proto = node.get("PrototypeUUID", "")
         out.append(Placed(
             kind="scenery",
@@ -333,7 +332,7 @@ def _scenery(root: Path, region: str, sub: str) -> list:
             basis=basis,
             scale=float(node.get("Scale", 1.0) or 1.0),
             model=models.get(proto),
-            fields={"prototype": proto, **_record(node, used)},
+            fields={"prototype": proto, **record(node, used)},
         ))
     return out
 
@@ -361,7 +360,7 @@ def _from_episodes(root: Path, region: str, sub: str, where: str, element: str,
             if node.get("UUID") and node.get("UUID") in taken:
                 continue
             taken.add(node.get("UUID"))
-            position, basis, used = _placement(node)
+            position, basis, used = placement(node)
             key = node.get(model_key, "")
             out.append(Placed(
                 kind=kind,
@@ -370,7 +369,7 @@ def _from_episodes(root: Path, region: str, sub: str, where: str, element: str,
                 position=position,
                 basis=basis,
                 model=models.get(key),
-                fields=_record(node, used),
+                fields=record(node, used),
             ))
     return out
 
@@ -429,7 +428,7 @@ def _all_triggers(root: Path) -> list:
                 uuid=node.get("UUID", ""),
                 name=node.get("UUID", "trigger"),
                 position=(0.0, 0.0, 0.0),
-                fields={**_record(node),
+                fields={**record(node),
                         **_attrs(base),
                         **(_attrs(shape) if shape is not None else {}),
                         "type": kind_number,
@@ -448,7 +447,7 @@ def _all_triggers(root: Path) -> list:
                         placed.position = tuple(
                             sum(p[k] for p in ring) / len(ring) for k in range(3))
                 else:
-                    placed.position, placed.basis, _ = _placement(shape)
+                    placed.position, placed.basis, _ = placement(shape)
             out.append((episode, where, placed))
     return out
 
@@ -463,7 +462,7 @@ def _label(node) -> str:
 
 def time_settings(root, region: str, sub: str) -> list:
     """The time settings a sub-region lists, in its own order."""
-    doc = _read(_folder(root, region, sub) / LIGHT_SETTINGS)
+    doc = _read(folder(root, region, sub) / LIGHT_SETTINGS)
     return [n.get("name") for n in doc.find_all("lightsetting")] if doc else []
 
 
@@ -496,7 +495,7 @@ def _time_at(model_path, time: str = "") -> str:
 
 
 def _lights(root: Path, region: str, sub: str, time: str = "") -> list:
-    here = _folder(root, region, sub)
+    here = folder(root, region, sub)
     time = time_setting(root, region, sub, time)
     if not time:
         return []
@@ -558,14 +557,14 @@ def _light(node, shape: str) -> Placed:
         # light's `translate` in all 71 spot lights the install ships.
         transform = next(node.find_all("NiTransform"), None)
         if transform is not None:
-            position, basis, _ = _placement(transform)
+            position, basis, _ = placement(transform)
         derived["fov"] = float(node.get("fov", 0.0) or 0.0)
     if basis is not None:
         derived["direction"] = [float(v) for v in np.asarray(basis)[:, 0]]
     derived["shadows"] = (next(node.find_all("light"), node).get("m_bCastShadows", "0"))
     name = point.get("Name") or node.get("Name", "")
     return Placed(kind="light", uuid=name, name=name or shape, position=position,
-                  basis=basis, fields={**_record(node), **derived})
+                  basis=basis, fields={**record(node), **derived})
 
 
 def water_styles(model_path, time: str = "") -> dict:
@@ -654,7 +653,7 @@ def _tree_models(root: Path) -> dict:
 
 
 def _trees(root: Path, region: str, sub: str) -> list:
-    doc = _read(_folder(root, region, sub) / "trees.xml")
+    doc = _read(folder(root, region, sub) / "trees.xml")
     if doc is None:
         return []
     models = _tree_models(Path(root))
@@ -674,7 +673,7 @@ def _trees(root: Path, region: str, sub: str) -> list:
             name=f"{model} {node.get('uuid', '')}".strip(),
             position=position,
             scale=rescaled * described.get("size", 1.0),
-            fields={**_record(node, points[:1]),
+            fields={**record(node, points[:1]),
                     **dict(model=model, spt=described.get("spt", ""),
                            variation_id=node.get("variation", "0"),
                            rotation=instance[0], colour=instance[2])},
@@ -724,12 +723,12 @@ def read(root, region: str, sub: str = "Main", time: str = "") -> Region:
     """
     root = Path(root)
     time = time_setting(root, region, sub, time)
-    here = _folder(root, region, sub)
+    here = folder(root, region, sub)
     out = Region(name=region, sub=sub)
 
     out.placed += _scenery(root, region, sub)
     out.placed += _from_episodes(root, region, sub, "Characters", "Character",
-                                 "character", _character_models(root),
+                                 "character", character_models(root),
                                  "VisualPrototypeUUID")
     out.placed += _from_episodes(root, region, sub, "Items", "Item",
                                  "item", _item_models(root), "PrototypeUUID")

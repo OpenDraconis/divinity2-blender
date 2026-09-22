@@ -286,11 +286,11 @@ def _flag(text) -> bool:
 
 def read(root: Path, region: str, sub: str = "Main") -> Recipe:
     """The recipe as the sub-region ships it."""
-    from .region import _folder        # region reads vegetation's tables
+    from .region import folder        # region reads vegetation's tables
     # A sub-region other than Main lives under `Subregions/`
     # (`CRegionVisualMan::PerformRegionSwap`'s base path); joining the name
     # straight onto the region missed every one of them.
-    here = _folder(root, region, sub)
+    here = folder(root, region, sub)
     templates, plants, cells, settings, record = {}, {}, [], {}, {}
 
     grid = docs.read(here / "vegetationgridsettings.xml")

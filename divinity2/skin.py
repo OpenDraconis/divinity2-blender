@@ -28,23 +28,7 @@ dropped and the rest renormalised, so the shape still arrives whole.
 
 import numpy as np
 
-
-def matrix(block) -> np.ndarray:
-    """Any NIF transform -- node, skin or bone -- as a 4x4."""
-    r = block.rotation
-    m = np.eye(4)
-    m[:3, :3] = (
-        np.array(
-            [
-                [r.m_11, r.m_12, r.m_13],
-                [r.m_21, r.m_22, r.m_23],
-                [r.m_31, r.m_32, r.m_33],
-            ]
-        ).T
-        * block.scale
-    )
-    m[:3, 3] = (block.translation.x, block.translation.y, block.translation.z)
-    return m
+from .graph import matrix_of
 
 
 def bone_matrices(shape) -> dict:
@@ -54,7 +38,7 @@ def bone_matrices(shape) -> dict:
         return {}
 
     return {
-        str(skin.bones[i].name): matrix(skin.data.bone_list[i].skin_transform)
+        str(skin.bones[i].name): matrix_of(skin.data.bone_list[i].skin_transform)
         for i in range(skin.num_bones)
     }
 

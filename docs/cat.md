@@ -37,7 +37,7 @@ and 162 hold neither**. The 162 without are the human ones —
 meshes. They share a skeleton and its clips with every other human, which is
 why the bundle does not repeat them.
 
-Resolving that shared rig is not yet implemented.
+`rig.shared_skeleton` resolves that shared rig.
 
 ## The version
 

@@ -40,8 +40,6 @@ KINDS = {
     "terrain": (WIN32 / "CompiledAssets", ""),
 }
 
-TEXTURES = WIN32 / "Textures"
-
 
 @dataclass(frozen=True)
 class Asset:
@@ -80,11 +78,6 @@ def assets(game_root: Path) -> tuple[Asset, ...]:
                     for g in groups
                 ]
     return tuple(found)
-
-
-def characters(game_root: Path) -> tuple[Asset, ...]:
-    """Only the character templates."""
-    return tuple(a for a in assets(game_root) if a.kind == "character")
 
 
 def search(game_root: Path, term: str, kind: str = "", limit: int = 100) -> list[Asset]:

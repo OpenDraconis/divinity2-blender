@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 id = "divinity2"
 version = "0.3.0"
 name = "Divinity II"
-tagline = "Import Divinity II: Ego Draconis models and regions"
+tagline = "Import Divinity II: Developer's Cut models and regions"
 maintainer = "divinity2-blender contributors"
 type = "add-on"
 
@@ -14,14 +14,15 @@ tags = ["Import-Export"]
 blender_version_min = "5.2.0"
 
 wheels = [
-  "./wheels/nifgen-2026.9.15-py3-none-any.whl",
+  "./wheels/nifgen-2026.9.15+dv2-py3-none-any.whl",
+  "./wheels/divinity2_lib-0.2.0-py3-none-any.whl",
 ]
 
 license = ["SPDX:GPL-3.0-or-later"]
 
 # The NIF reader is generated from the NifTools project's format
 # specification and bundled as a wheel; the archive and binary-XML reader is
-# divinity2-lib, vendored under vendor/dv2lib.
+# divinity2-lib, bundled as a wheel the same way.
 copyright = [
   "2026 divinity2-blender contributors",
   "2005 NIF File Format Library and Tools contributors",
@@ -40,4 +41,6 @@ paths_exclude_pattern = [
   "/.gitignore",
   "/CLAUDE.md",
   "/DECISIONS.md",
+  "/.agents/",
+  "/.codex/",
 ]
