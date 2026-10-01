@@ -234,6 +234,17 @@ def build_mesh(drawn, scale: float, rest: dict | None = None):
     return obj
 
 
+def build_particles(system, world, scale: float):
+    """A particle system as an empty at its node: Blender has nothing that runs
+    a Gamebryo system, so the object only marks the place, and the system
+    itself travels as data (`divinity2.particles`)."""
+    obj = bpy.data.objects.new(str(system.name) or "particles", None)
+    obj.empty_display_type = "SPHERE"
+    obj.matrix_world = _scaled(Matrix(world.tolist()), scale)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
 def bind_skin(obj, shape, armature_obj) -> int:
     """Weights from NiSkinData onto vertex groups. Returns the bone count."""
     skin = getattr(shape, "skin_instance", None)
@@ -275,33 +286,3 @@ def attach_to_bone(obj, armature_obj, bone_name: str) -> bool:
     )
     return True
 
-
-def attach_rest_mesh_to_bone(obj, armature_obj, bone_name: str) -> bool:
-    """Follow a bone without changing a mesh already authored in rest space.
-
-    Face meshes are converted to the skeleton rest pose before export.  They
-    must therefore retain their current world transform at frame 0, while
-    still inheriting the selected bone's animated motion.  Regular bone
-    parenting otherwise places the object at the bone tail and introduces a
-    visible head offset in idle clips.
-    """
-    bone = armature_obj.data.bones.get(bone_name)
-    if bone is None:
-        return False
-
-    world = obj.matrix_world.copy()
-    obj.parent = armature_obj
-    obj.parent_type = "BONE"
-    obj.parent_bone = bone_name
-
-    # Blender's bone-parent origin is the tail.  Build the same rest-space
-    # parent matrix used by attach_to_bone, then invert it so the mesh keeps
-    # its authored world position at rest while following pose transforms.
-    parent_rest = (
-        armature_obj.matrix_world
-        @ Matrix.Translation(bone.tail_local - bone.head_local).inverted()
-        @ bone.matrix_local
-    )
-    obj.matrix_parent_inverse = parent_rest.inverted_safe()
-    obj.matrix_world = world
-    return True

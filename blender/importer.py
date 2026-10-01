@@ -5,12 +5,13 @@ file filled in: a barrel has no skeleton, so no armature is built and every
 shape keeps its own node transform.
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import bpy
 
-from ..divinity2 import attach, graph, rig, static_asset, terrain
+from ..divinity2 import attach, graph, particles, rig, static_asset, terrain
 from ..divinity2.character import read_clips, read_model
 from ..divinity2.nif import UNITS_PER_METRE
 
@@ -30,6 +31,7 @@ class Result:
     skinned: int = 0
     attached: int = 0
     hidden_lods: int = 0
+    particles: int = 0       #: particle systems, as empties carrying `dv2_particles`
     grafted: int = 0         #: terrain and static asset stubs filled from their streamed files
     materials: int = 0
     clips: int = 0
@@ -45,6 +47,7 @@ def import_asset(
     extra_clips=(),
     standard_data: bool = False,
     for_unity: bool = False,
+    model=None,
 ) -> Result:
     """Read any model file and build it: armature, meshes, skin, materials, clips.
 
@@ -59,6 +62,8 @@ def import_asset(
     `for_unity`: build what Unity's FBX importer takes as the game has it, which is not
     always what the game has (the head and hair below, `build_material`'s names). The
     Unity port asks for it; in Blender itself the model stays as the engine draws it.
+
+    `model`: the model already read (`character.read_part`, one equipment part), `path` its file.
     """
     game_root = Path(game_root)
     cache = Path(cache) if cache else game_root.parent / ".dv2-texture-cache"
@@ -66,7 +71,7 @@ def import_asset(
     for key, value in dv2_material.GLOBALS.items():
         if f"dv2_{key}" not in bpy.context.scene:
             bpy.context.scene[f"dv2_{key}"] = value
-    character = read_model(path)
+    character = model if model is not None else read_model(path)
     result = Result()
 
     # Half the characters carry no skeleton: they share their family's.
@@ -119,21 +124,15 @@ def import_asset(
             if result.armature is None:
                 continue
 
-            # Human head and hair meshes use a dense facial rig whose bind
-            # data is not represented faithfully by Unity's generic FBX
-            # skin importer. Their vertices are already in the measured
-            # skeleton rest pose (`build_mesh` above), so keep that pose and
-            # carry the pieces with the armature root instead of applying a
-            # second, corrupted facial deformation at runtime.
-            static_face = for_unity and any(token in f"{mesh.name}/{drawn.name}".lower()
-                                            for token in ("head", "hair"))
-            if not static_face and scene.bind_skin(obj, drawn.shape, result.armature):
+            # Every skinned shape, heads and hair included, is skinned the one
+            # way the engine skins it: `MdlMan::CModel::ProcessSkinnedGeometry`
+            # @c7c4c0 binds its bones by name to the family skeleton, and
+            # `NiDX9Renderer::CalculateBoneMatrices` @5e4250 deforms it like any
+            # other shape. `skin.py`'s formula equals the engine's whenever
+            # `Shape.Local * NiSkinData.skin_transform` is the identity, which
+            # it is for every shape of F_Rhode, the 28-bone MAX head included.
+            if scene.bind_skin(obj, drawn.shape, result.armature):
                 result.skinned += 1
-            elif static_face and result.armature.data.bones.get("Head") is not None \
-                    and scene.attach_rest_mesh_to_bone(obj, result.armature, "Head"):
-                # The facial mesh is already in rest space; follow the head
-                # bone without applying the dense facial skin a second time.
-                result.attached += 1
             elif bone is not None and scene.attach_to_bone(
                 obj, result.armature, bone
             ):
@@ -141,6 +140,14 @@ def import_asset(
             else:
                 # No socket for it. It still travels with the character.
                 obj.parent = result.armature
+
+        for system, world, where, parent, state in particles.walk(mesh.root):
+            obj = scene.build_particles(system, world, factor)
+            obj["dv2_path"] = where
+            obj["dv2_particles"] = json.dumps(particles.describe(system, world, where, parent, state,
+                                                                 mesh.root, factor))
+            result.objects.append(obj)
+            result.particles += 1
 
     # A family's shared `.kf` repeats what the character already bundles --
     # a Froblin's own 15 clips are exactly Froblin_Base.kf's 15 -- so the

@@ -16,13 +16,19 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ..divinity2 import animation as dv2_animation
 
-def _sample(track, at: float, factor: float):
+def _sample(track, at: float, factor: float, rest: Matrix):
     """Location, rotation and scale of one bone at one point in the clip
     (`divinity2.animation.sample`). A stated rotation of no length and a stated
-    scale that is not positive read as the identity; an animated one as given."""
+    scale that is not positive read as the identity; an animated one as given.
+
+    A component the track does not state keeps the bone's rest value `rest`:
+    the engine writes no `INVALID_TRANSLATE` or `INVALID_ROTATE` component
+    (`NiMultiTargetTransformController::Update` @63e070). Zero instead put 12 of
+    F_Rhode's `FACE_Default` nodes, `FACE` and the nose, brows and cheeks among
+    them, on their parent's origin and tore the face."""
     t, r, s = dv2_animation.sample(track, at)
-    location = Vector(t) * factor if t is not None else Vector((0.0, 0.0, 0.0))
-    rotation = Quaternion((1.0, 0.0, 0.0, 0.0))
+    location = Vector(t) * factor if t is not None else rest.to_translation()
+    rotation = rest.to_quaternion() if r is None else Quaternion((1.0, 0.0, 0.0, 0.0))
     if r is not None and (track.rotations or Quaternion(r).magnitude > 1e-6):
         rotation = Quaternion(r).normalized()
     scale = 1.0
@@ -69,7 +75,7 @@ def build_action(armature_obj, clip, factor: float, fps: int | None = None):
 
         for frame in range(frames):
             at = frame / (frames - 1)
-            location, rotation, scale = _sample(track, at, factor)
+            location, rotation, scale = _sample(track, at, factor, rest[track.node])
             local = Matrix.LocRotScale(location, rotation, (scale, scale, scale))
             bone.matrix_basis = basis @ local
 

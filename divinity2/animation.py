@@ -26,12 +26,19 @@ TRANSFORM_INTERPOLATOR = "NiTransformInterpolator"
 
 
 def evaluate(control_points: list, at: float) -> tuple:
-    """A uniform cubic B-spline through `control_points`, at 0.0 <= at <= 1.0.
+    """A cubic B-spline through `control_points`, at 0.0 <= at <= 1.0.
 
     The control points are not points on the curve; each span is a weighted
     blend of four of them. Treating them as keyframes -- which is the tempting
     shortcut -- gives an animation that is close but wrong, and wrong in a way
     that looks like bad rigging rather than bad maths.
+
+    The knots are open uniform, clamped at both ends: `0,0,0,0,1,...,n-4,
+    n-3,n-3,n-3,n-3` over `n` points, so the curve starts on the first point
+    and ends on the last. That is `NiBSplineBasis<float,3>::Compute` @652dc0,
+    whose first and last spans weigh with 1 and 1/2 where the inner ones
+    weigh with 1/2 and 1/3. The unclamped basis missed both ends, so a
+    looping clip jumped at every cycle.
     """
     n = len(control_points)
     if n == 0:
@@ -40,21 +47,24 @@ def evaluate(control_points: list, at: float) -> tuple:
         return tuple(control_points[-1])
 
     spans = n - DEGREE
+    knots = [0] * DEGREE + list(range(spans + 1)) + [spans] * DEGREE
     u = max(0.0, min(1.0, at)) * spans
-    i = min(int(u), spans - 1)
-    t = u - i
+    i = min(int(u), spans - 1) + DEGREE
 
-    t2, t3 = t * t, t * t * t
-    b = (
-        (1.0 - 3.0 * t + 3.0 * t2 - t3) / 6.0,
-        (4.0 - 6.0 * t2 + 3.0 * t3) / 6.0,
-        (1.0 + 3.0 * t + 3.0 * t2 - 3.0 * t3) / 6.0,
-        t3 / 6.0,
-    )
+    b = [1.0]
+    for d in range(1, DEGREE + 1):
+        nxt = [0.0] * (d + 1)
+        for k, value in enumerate(b):
+            j = i - d + 1 + k
+            left, right = knots[j + d] - knots[j], knots[j + d] - u
+            share = value * right / left if left else 0.0
+            nxt[k] += share
+            nxt[k + 1] += value - share
+        b = nxt
 
-    width = len(control_points[i])
+    width = len(control_points[i - DEGREE])
     return tuple(
-        sum(b[k] * control_points[i + k][axis] for k in range(4))
+        sum(b[k] * control_points[i - DEGREE + k][axis] for k in range(DEGREE + 1))
         for axis in range(width)
     )
 

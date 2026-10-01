@@ -180,6 +180,60 @@ def _map(desc) -> dict:
     return out
 
 
+def _float_keys(interpolator) -> dict:
+    """A `NiFloatInterpolator`'s keys, whole, in the file's order: `[time, value]`,
+    quadratic ones `[time, value, in, out]` (`NiBezFloatKey::LoadBinary` @625de0
+    reads `m_fInTan` then `m_fOutTan`, which `nif.xml` calls forward and backward),
+    TBC ones `[time, value, t, b, c]`. No keys: the interpolator's pose value."""
+    data = getattr(getattr(interpolator, "data", None), "data", None)
+    if data is None or not int(data.num_keys):
+        return {"type": None, "keys": [], "value": float(getattr(interpolator, "value", 0.0))}
+    kind = data.interpolation.name
+    keys = []
+    for k in data.keys:
+        row = [float(k.time), float(k.value)]
+        if kind == "QUADRATIC_KEY":
+            row += [float(k.forward), float(k.backward)]
+        elif kind == "TBC_KEY":
+            row += [float(k.tbc.t), float(k.tbc.b), float(k.tbc.c)]
+        keys.append(row)
+    return {"type": kind, "keys": keys}
+
+
+def _texture_controllers(texturing, maps: dict, shader_maps: list) -> None:
+    """Every `NiTextureTransformController` on the property, on the map it drives.
+
+    `NiTextureTransformController::Update` @636840 sets one member of the map's
+    `NiTextureTransform` to the interpolated value each frame, making a MAYA
+    transform first when the map has none; the time it samples at is
+    `NiTimeController::ComputeScaledTime` @54cd60 of the flags, frequency,
+    phase and start/stop kept here. A controller whose interpolator is a blend
+    one takes its value from a sequence (`sequence.describe`), which names it by
+    `slot` and `member`."""
+    ctlr = getattr(texturing, "controller", None)
+    while ctlr is not None:
+        if type(ctlr).__name__ == "NiTextureTransformController":
+            flags = ctlr.flags
+            index = int(ctlr.texture_slot)
+            entry = {
+                "member": ctlr.operation.name,
+                "cycle": flags.cycle_type.name, "anim": flags.anim_type.name,
+                "backwards": bool(flags.play_backwards), "active": bool(flags.active),
+                "frequency": float(ctlr.frequency), "phase": float(ctlr.phase),
+                "start": float(ctlr.start_time), "stop": float(ctlr.stop_time),
+                "interpolator": type(ctlr.interpolator).__name__,
+                "slot": index, "shader_map": bool(ctlr.shader_map),
+                **_float_keys(ctlr.interpolator),
+            }
+            if ctlr.shader_map:
+                target = next((m for m in shader_maps if m["id"] == index), None)
+            else:
+                target = maps.get(MAPS[index]) if index < len(MAPS) else None
+            if target is not None:
+                target.setdefault("controllers", []).append(entry)
+        ctlr = getattr(ctlr, "next_controller", None)
+
+
 def uv_matrix(transform: dict) -> list:
     """`NiTextureTransform::UpdateMatrix` @0x533fd0: the 2x3 matrix that takes a
     file UV `(u, v, 1)` to the one sampled, for each of the three methods.
@@ -278,6 +332,8 @@ def describe(properties: dict, shape, data, pixel_format=lambda name: None,
         maps["normal"]["packing"] = None if found is None else NORMAL_TYPES.get(found, "RGB")
     shader_maps = [dict(_map(m.map), id=int(m.map_id))
                    for m in (getattr(texturing, "shader_textures", None) or ()) if m.has_map]
+    if texturing is not None:
+        _texture_controllers(texturing, maps, shader_maps)
 
     colours = None
     block = properties.get("NiMaterialProperty")
