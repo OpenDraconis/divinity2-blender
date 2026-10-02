@@ -1,9 +1,3 @@
-"""The whole interface: unpacking the game once, two import operators and one panel.
-
-Choose a name, press OK, the asset arrives. No file browser, no preferences
-beyond the game's two folders, no command line.
-"""
-
 import shutil
 import sys
 import threading
@@ -23,24 +17,18 @@ PACKAGE = __package__.rpartition(".")[0]
 
 def _game_root(context) -> str:
     prefs = context.preferences.addons[PACKAGE].preferences
-    # Every entry point asks for the game first, so the documents are
-    # registered here once rather than in each operator. Another folder
-    # starts over: the old one must not keep answering first.
     if prefs.game_root and docs.ROOTS[:1] != [Path(prefs.game_root)]:
         docs.begin(prefs.game_root)
     return prefs.game_root
 
 
 def _cache() -> str:
-    """Converted textures, in the add-on's own user folder: kept across upgrades, gone
-    with the add-on (`bpy.utils.extension_path_user`; the manual's "Local Storage")."""
+    # bpy.utils.extension_path_user bpy
     return bpy.utils.extension_path_user(PACKAGE, path="texture-cache", create=True)
 
 
-#: About what an unpack writes: 34,857 files, 6.9 GB, measured on the Steam Developer's Cut.
 UNPACKED_BYTES = 7_400_000_000
 
-#: The unpack running, or what the last one said; the preferences show it.
 _unpacking = {"thread": None, "done": 0, "total": 0, "stop": False, "said": ""}
 
 
@@ -49,7 +37,6 @@ class _Stopped(Exception):
 
 
 def _forget_reads() -> None:
-    """Every cached read of the game folder, gone: an unpack has just rewritten it."""
     for name, module in list(sys.modules.items()):
         if name.startswith(PACKAGE + ".divinity2."):
             for value in list(vars(module).values()):
@@ -58,7 +45,6 @@ def _forget_reads() -> None:
 
 
 def _watch_unpack():
-    """A timer while the unpack runs: redraw the preferences, and tidy up when it ends."""
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == "PREFERENCES":
@@ -71,8 +57,6 @@ def _watch_unpack():
 
 
 class DV2_OT_unpack(Operator):
-    """Unpack the game into the game folder: every file the engine loads, and its documents, named. About 7 GB and a minute. Press again to stop"""
-
     bl_idname = "divinity2.unpack"
     bl_label = "Unpack the game"
 
@@ -92,7 +76,6 @@ class DV2_OT_unpack(Operator):
             return {"CANCELLED"}
         out = Path(prefs.game_root)
         out.mkdir(parents=True, exist_ok=True)
-        # A folder that holds anything but an earlier unpack is someone's files.
         if any(out.iterdir()) and not (out / "unpack.json").is_file():
             self.report({"ERROR"}, f"{out} is not empty: choose an empty folder")
             return {"CANCELLED"}
@@ -171,8 +154,6 @@ def _asset_items(self, context):
 
 
 class DV2_OT_import_asset(Operator):
-    """Import a Divinity II model by name: character, scenery, item, effect"""
-
     bl_idname = "divinity2.import_asset"
     bl_label = "Divinity II asset"
     bl_options = {"REGISTER", "UNDO"}
@@ -192,12 +173,6 @@ class DV2_OT_import_asset(Operator):
         layout.prop(self, "choice")
 
     def _resolve(self, context) -> str | None:
-        """The asset to import: the one picked, or the one a name can only mean.
-
-        The enum is only filled in by the dialog, so a script that passes a
-        name alone arrives here with nothing chosen. A name that matches one
-        asset, or matches one exactly, needs no second question.
-        """
         if self.choice:
             return self.choice
         root = _game_root(context)
@@ -246,24 +221,20 @@ def _sub_items(self, context):
     return items
 
 
-#: The time item that leaves the choice to the game. An empty identifier would make
-#: it a separator, not a choice (`bpy.props.EnumProperty`).
+# bpy.props.EnumProperty bpy
 GAME_TIME = "<game>"
 
 
 def _time_items(self, context):
-    """The game's own choice first, then every time setting the sub-region lists."""
     root = _game_root(context)
     listed = (region.time_settings(root, self.region_name, self.sub)
               if root and self.region_name and self.sub != ALL else [])
     _time_items.keep = [(GAME_TIME, "As the game does", "`CGameLogic_SubRegion::Load`'s choice")] \
         + [(t, t, "A time setting this sub-region lists") for t in listed]
-    return _time_items.keep     # Blender needs the strings kept alive
+    return _time_items.keep
 
 
 class DV2_OT_import_region(Operator):
-    """Import a whole Divinity II region: ground, props, people, lights"""
-
     bl_idname = "divinity2.import_region"
     bl_label = "Divinity II region"
     bl_options = {"REGISTER", "UNDO"}
@@ -278,8 +249,6 @@ class DV2_OT_import_region(Operator):
     light: BoolProperty(name="Lights", default=True)
     tree: BoolProperty(name="Trees", default=True)
     trigger: BoolProperty(name="Triggers", default=False)
-    # Off by default: the grass is thousands of objects, and a first look at
-    # a region is faster without it.
     vegetation: BoolProperty(name="Grass", default=False)
 
     def invoke(self, context, event):

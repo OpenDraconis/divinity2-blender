@@ -1,10 +1,3 @@
-"""Importing one Divinity II model into the current Blender scene.
-
-A character and a barrel take the same path. Where they differ is what the
-file filled in: a barrel has no skeleton, so no armature is built and every
-shape keeps its own node transform.
-"""
-
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,8 +15,6 @@ from . import scene
 
 @dataclass
 class Result:
-    """What arrived, so a caller can check rather than trust."""
-
     armature: object = None
     objects: list = field(default_factory=list)
     bones: int = 0
@@ -31,8 +22,8 @@ class Result:
     skinned: int = 0
     attached: int = 0
     hidden_lods: int = 0
-    particles: int = 0       #: particle systems, as empties carrying `dv2_particles`
-    grafted: int = 0         #: terrain and static asset stubs filled from their streamed files
+    particles: int = 0
+    grafted: int = 0
     materials: int = 0
     clips: int = 0
     actions: list = field(default_factory=list)
@@ -49,32 +40,14 @@ def import_asset(
     for_unity: bool = False,
     model=None,
 ) -> Result:
-    """Read any model file and build it: armature, meshes, skin, materials, clips.
-
-    `extra_clips` are clips from elsewhere that play on this skeleton -- a
-    region's `customanimations.kf`, named by the scripts of the characters that
-    stand in it. They come after the character's own and its family's.
-
-    `standard_data`: the model is region geometry, a static asset or terrain,
-    which the engine runs through `CShadingTools::SetupStandardData`
-    (`divinity2.material.STANDARD_DATA`).
-
-    `for_unity`: build what Unity's FBX importer takes as the game has it, which is not
-    always what the game has (the head and hair below, `build_material`'s names). The
-    Unity port asks for it; in Blender itself the model stays as the engine draws it.
-
-    `model`: the model already read (`character.read_part`, one equipment part), `path` its file.
-    """
     game_root = Path(game_root)
     cache = Path(cache) if cache else game_root.parent / ".dv2-texture-cache"
-    # A model alone has no region: the engine's registration defaults light it.
     for key, value in dv2_material.GLOBALS.items():
         if f"dv2_{key}" not in bpy.context.scene:
             bpy.context.scene[f"dv2_{key}"] = value
     character = model if model is not None else read_model(path)
     result = Result()
 
-    # Half the characters carry no skeleton: they share their family's.
     skeleton = rig.shared_skeleton(character, game_root)
     rest = None
     if skeleton is None and with_animation and character.clips and len(character.meshes) == 1:
@@ -102,10 +75,7 @@ def import_asset(
             carried_so_far += 1
 
         factor = _factor(mesh.root)
-        # A region's terrain stubs are empty until their streamed files are
-        # hung under them. Everything else has no manifest and is untouched.
         result.grafted += terrain.graft(mesh.root, path)
-        # A region's static assets likewise, at the finest level (`divinity2.static_asset`).
         result.grafted += static_asset.graft(mesh.root, game_root)
         for drawn in graph.walk(mesh.root):
             obj = scene.build_mesh(drawn, factor, rest)
@@ -126,13 +96,7 @@ def import_asset(
             if result.armature is None:
                 continue
 
-            # Every skinned shape, heads and hair included, is skinned the one
-            # way the engine skins it: `MdlMan::CModel::ProcessSkinnedGeometry`
-            # @c7c4c0 binds its bones by name to the family skeleton, and
-            # `NiDX9Renderer::CalculateBoneMatrices` @5e4250 deforms it like any
-            # other shape. `skin.py`'s formula equals the engine's whenever
-            # `Shape.Local * NiSkinData.skin_transform` is the identity, which
-            # it is for every shape of F_Rhode, the 28-bone MAX head included.
+            # NiDX9Renderer::CalculateBoneMatrices @5e4250 decomp
             if scene.bind_skin(obj, drawn.shape, result.armature):
                 result.skinned += 1
             elif bone is not None and scene.attach_to_bone(
@@ -140,7 +104,6 @@ def import_asset(
             ):
                 result.attached += 1
             elif not scene.hang_on_bone(obj, result.armature, _parent_node(drawn.path)):
-                # No socket for it. It still travels with the character.
                 obj.parent = result.armature
 
         for system, world, where, parent, state in particles.walk(mesh.root):
@@ -151,9 +114,6 @@ def import_asset(
             result.objects.append(obj)
             result.particles += 1
 
-    # A family's shared `.kf` repeats what the character already bundles --
-    # a Froblin's own 15 clips are exactly Froblin_Base.kf's 15 -- so the
-    # shared set only contributes names the character does not already have.
     clips = list(character.clips)
     if shared_clips:
         known = {c.name for c in clips}
@@ -167,10 +127,6 @@ def import_asset(
     result.clips = len(clips)
 
     if with_animation and clips and result.armature is not None:
-        # A clip's translation keys are in game units in the bone's own local
-        # space, and a Blender bone has no scale to carry the root's 0.01 --
-        # `EditBone.matrix` keeps the orientation and drops it. So keys always
-        # convert by the full unit, never by the tree's factor.
         result.actions = dv2_animation.build_actions(
             result.armature, clips, 1.0 / UNITS_PER_METRE
         )
@@ -183,49 +139,24 @@ def import_asset(
     return result
 
 
+# CStreamableAssetData::GetActorManager @1063180, NiMultiTargetTransformController::Update @63e070 decomp
 def _animated_tree(character):
-    """An unskinned asset's own node tree, when its sequences drive it.
-
-    `CStreamableAssetData::GetActorManager` @1063180 builds the item's actor manager over
-    the streamed root, and `NiMultiTargetTransformController::Update` @63e070 moves the
-    NiNodes the sequences name whether any shape is skinned or not: a cave door turns its
-    `IT_Door_Cave_A` node, a barrel lifts its `Object01`. The armature is how those nodes
-    reach Blender, so the tree becomes one."""
     return character.meshes[0].root
 
 
 def _parent_node(path: str) -> str:
-    """The node a shape hangs under, from its `graph.walk` path."""
     parts = path.split("/")
     return parts[-2] if len(parts) > 1 else ""
 
 
 def _factor(root) -> float:
-    """Game units to metres for one node tree.
-
-    Every model in the game is authored in centimetres. How many of those
-    units reach the world is stated on the tree's root node: a character
-    leaves `Scene Root` at 1.0, and every scenery, item, effect and fortress
-    bakes the conversion into it as 0.01. `graph.walk` already applies that
-    scale, so the factor must not apply it a second time -- hence the product.
-    """
     return 1.0 / (UNITS_PER_METRE * float(root.scale))
 
 
-#: What the engine calls the state a character stands in, from its own
-#: animation table: `CGameLogic_FixedStrings::ms_kAnimation_Still`, beside
-#: `ms_kAnimation_F_Normal` and the rest of the movement set.
 RESTING = "Still"
 
 
 def _resting(actions):
-    """The clip to show first.
-
-    A character's own `.cat` holds only its variant clips -- `Black_Goblin`
-    has `Stunned`, `Flee`, `Blind` and twelve ways to die -- and the standing
-    clip comes from the family's shared set, which is appended after. Taking
-    the first action therefore shows a goblin mid-stun.
-    """
     for want in (RESTING, "Idle"):
         for action in actions:
             if action.name.rpartition("|")[2].startswith(want):

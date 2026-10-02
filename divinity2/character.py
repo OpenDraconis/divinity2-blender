@@ -1,18 +1,3 @@
-"""A Divinity II model file, of either shape the game ships.
-
-There are exactly two. A `.cat` bundles a whole character: the skeleton, the
-mesh files, the animation set and the clips, each as an `MdlMan::` entry that
-keeps the path it had before it was bundled. Everything else -- scenery, item,
-effect, flying fortress, compiled asset -- is a plain NIF with one
-`CStreamableAssetData` block at its root.
-
-Both arrive here as a `Character`, because the difference between them is what
-is filled in, not what they are: an asset is a character with one mesh, no
-family and usually no skeleton.
-
-See `docs/cat.md` for the `.cat` block layout, `docs/assets.md` for the rest.
-"""
-
 import struct
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -20,33 +5,24 @@ from pathlib import Path, PureWindowsPath
 
 from .nif import read_nif
 
-#: The entry kinds a `.cat` root holds, by their block name without namespace.
 SKELETON = "CSkeletonDataEntry"
 MESH = "CMeshDataEntry"
 ANIMATION = "CAnimationDataEntry"
 ANIMATION_SET = "CAMDataEntry"
 
-#: The extension that marks a bundled character rather than a plain asset.
 CHARACTER_SUFFIX = ".cat"
 
 ROOT_BLOCK = "MdlMan::CModelTemplateDataEntry"
 
-#: The root block of every non-character model file. `CStreamableAssetData`
-#: is read by the engine in `CStreamableAssetData::LoadBinary`: one link to
-#: the `NiNode` root, a flag byte, and -- when the flag is set -- an embedded
-#: KFM handed to `DivTools::CKFMToolStreamer::LoadBinaryStream`. So an asset
-#: carries its animation set exactly the way a `.cat` does.
 STREAMABLE = "CStreamableAssetData"
 
 
 @dataclass
 class Clip:
-    """One named animation, as the game lists it: `Idle1`, `Move_F_Normal`."""
-
     name: str
     start: float
     stop: float
-    sequence: object  # NiControllerSequence
+    sequence: object
 
     @property
     def duration(self) -> float:
@@ -55,25 +31,19 @@ class Clip:
 
 @dataclass
 class Mesh:
-    """One mesh file that was bundled into the character."""
-
     name: str
-    root: object  # NiNode
-    #: The part's `MdlMan::CMeshEntry` (`texture_base`, `extra_data`, `search`),
-    #: None where the table has no entry; see `mesh_entry`.
+    root: object
     entry: dict | None = None
 
 
 @dataclass
 class Character:
-    """Everything a `.cat` holds."""
-
     name: str
     path: Path
-    skeleton: object = None  # NiNode, the skeleton's own scene root
+    skeleton: object = None
     meshes: list[Mesh] = field(default_factory=list)
     clips: list[Clip] = field(default_factory=list)
-    animation_set: bytes = b""  # a KFM without its header
+    animation_set: bytes = b""
 
 
 def _kind(block) -> str:
@@ -81,7 +51,6 @@ def _kind(block) -> str:
 
 
 def _sequences(nif) -> list[Clip]:
-    """Every clip a NIF holds, in file order."""
     return [
         Clip(name=str(s.name), start=s.start_time, stop=s.stop_time, sequence=s)
         for s in nif.blocks
@@ -90,7 +59,6 @@ def _sequences(nif) -> list[Clip]:
 
 
 def read_model(path: str | Path) -> Character:
-    """Read any model the game ships: a `.cat`, a plain asset, or a folder."""
     path = Path(path)
     if path.is_dir():
         return read_compiled(path)
@@ -100,19 +68,6 @@ def read_model(path: str | Path) -> Character:
 
 
 def read_compiled(group: str | Path) -> Character:
-    """One `LODGroup` folder of a compiled asset.
-
-    `CompiledAssets/<name>/LODGroup<nn>/<n>.nif`. A `LODGroup` is one model --
-    a statue's figure is one, its plinth another -- and the numbered files
-    inside it are its levels of detail. **The highest number is the finest**:
-    of the 295 groups holding more than one file, 164 grow with the number,
-    none shrink, and 5 are identical.
-
-    The groups of one folder are not pieces of one object. Each is authored
-    around its own centre -- the figure spans z -458..458, the plinth
-    -154..154 -- and the world data, not the asset, says where each stands.
-    Importing them together would stack them at the origin.
-    """
     group = Path(group)
     files = sorted(group.glob("*.nif"), key=lambda p: (len(p.stem), p.stem))
     if not files:
@@ -130,13 +85,6 @@ def _only_group(group: Path) -> bool:
 
 
 def read_asset(path: str | Path) -> Character:
-    """Read one plain asset: scenery, an item, an effect, a fortress.
-
-    The whole model hangs off the streamable block's root, so there is one
-    mesh entry and it is the file. A fortress is skinned and carries its own
-    bones in that same tree -- there is no family skeleton to find for it, so
-    the tree is the skeleton too.
-    """
     path = Path(path)
     nif = read_nif(path)
 
@@ -160,43 +108,13 @@ def read_asset(path: str | Path) -> Character:
     )
 
 
-#: The table `CMdlManMapper::Initialize` @0x68a2e0 loads, beside the templates' folder.
+# CMdlManMapper::Initialize @68a2e0 decomp
 MESH_ENTRIES = "MdlManBinary.nif"
 
 
+# MdlMan::CModelPrototype::LoadBinary @c99900, MdlMan::CModelTemplate::LoadBinary @c9c8a0, MdlMan::CMesh::LoadBinary @c97ca0 decomp
 @lru_cache(maxsize=4)
 def model_manager(path: str | Path) -> dict:
-    """What `MdlManBinary.nif` says about character parts.
-
-    - `entries`: the `CMeshEntry` blocks by part name in lower case.
-      `CMeshEntry::LoadBinary` @0x1092340: string name, string texture base,
-      string extra data, u8 search extra textures, u32 name id, link property
-      group. The engine re-binds a part's maps by the entry's texture base
-      (`CMeshWrapper::SetupTexturingProperty` @0xc9de80;
-      docs/sources.md, "Character part maps"). Measured: 828, no name twice.
-    - `templates`: each `CModelTemplate`'s slot assignments, template name in
-      lower case -> the entry names it assigns (u32 name, u32, u32 prototype,
-      u32 properties, u32 count, then count pairs of sized strings, slot and
-      entry; the focused NIF reader round-trips it).
-    - `meshes`: each `CMesh` block's name in lower case -> the entries it links
-      (u32 source file, u32 name, u8, u32 slot hash, u32 count, then count pairs
-      of u32 hash and a block link; `nifpatch.read_mesh` in divinity2-research).
-      Measured: the links resolve to `CMeshEntry` blocks, and `Pig` links
-      `Pig_Body_A`, the entry `Pig_A`'s template assigns, where the part's own
-      file is `Pig.nif`.
-
-    - `slots`: each `CSlot` block (`CSlot::LoadBinary` @1093080): its name, the node a rigid
-      part hangs under (`attach`), its id (`hash_name` of the name), the equipment type ids it
-      takes, and the `CMesh` blocks it links -- the meshes it can hold.
-    - `mesh_blocks`: each `CMesh` block (`CMesh::LoadBinary` @c97ca0): the node its file is
-      named after, whether it is skinned, its equipment type id, and its entries by name hash.
-    - `prototypes[...]["slots"]`: the `CSlot` blocks of a `CModelPrototype` (`LoadBinary`
-      @c99900), `slot_order` the slot ids in the model's order; `template_models[...]["defaults"]`
-      the template's slot -> entry pairs, an empty entry not kept (`CModelTemplate::LoadBinary` @c9c8a0).
-
-    nifgen has no such blocks, so the header is walked by the focused NIF
-    reader. Empty when the file is not there.
-    """
     path = Path(path)
     out = {"entries": {}, "templates": {}, "meshes": {}, "groups": {}, "descriptors": {},
            "prototypes": {}, "template_models": {}, "enums": {}, "slots": {}, "mesh_blocks": {}}
@@ -204,7 +122,7 @@ def model_manager(path: str | Path) -> dict:
         return out
     data = path.read_bytes()
     u32 = lambda at: struct.unpack_from("<I", data, at)[0]   # noqa: E731
-    at = data.index(b"\n") + 1 + 4 + 1 + 4                  # version, endian, user version
+    at = data.index(b"\n") + 1 + 4 + 1 + 4
     blocks = u32(at); at += 4
     types = []
     count = struct.unpack_from("<H", data, at)[0]; at += 2
@@ -213,10 +131,10 @@ def model_manager(path: str | Path) -> dict:
     kinds = struct.unpack_from(f"<{blocks}H", data, at); at += 2 * blocks
     sizes = struct.unpack_from(f"<{blocks}I", data, at); at += 4 * blocks
     strings = []
-    count = u32(at); at += 8                                   # count, longest
+    count = u32(at); at += 8
     for _ in range(count):
         n = u32(at); strings.append(data[at + 4:at + 4 + n].decode("latin-1")); at += 4 + n
-    at += 4 + 4 * u32(at)                                      # groups
+    at += 4 + 4 * u32(at)
     text = lambda i: strings[i] if 0 <= i < len(strings) else None   # noqa: E731
 
     starts, names = [], {}
@@ -230,12 +148,10 @@ def model_manager(path: str | Path) -> dict:
             out["entries"][text(name).lower()] = {"name": text(name), "texture_base": text(base),
                                                   "extra_data": text(extra), "search": bool(data[start + 12])}
     sized = lambda at: (data[at + 4:at + 4 + u32(at)].rstrip(b"\0").decode("latin-1"),  # noqa: E731
-                        at + 4 + u32(at))                  # a SizedString, and the cursor behind it
+                        at + 4 + u32(at))
     for index, (kind, start) in enumerate(zip(kinds, starts)):
         kind = types[kind & 0x7FFF]
-        # The model side of the same file: which KFM (animation set) a model may play.
-        # `CModelPrototype` holds the `CKFMDescriptor`s, each with a `CPropertyGroup` of masks over the
-        # `CStringMapper`'s enums (`CollectKFMDescriptors` @0x6c8950; divinity2-port's notes, character-animation.md 1).
+        # CKFMRegisterLayer::CollectKFMDescriptors @6c8950 decomp
         if kind == "CPropertyGroup":
             out["groups"][index] = {u32(start + 4 + 12 * i): struct.unpack_from("<Q", data, start + 8 + 12 * i)[0]
                                     for i in range(u32(start))}
@@ -243,10 +159,10 @@ def model_manager(path: str | Path) -> dict:
             out["descriptors"][index] = {"kfm": text(u32(start)), "properties": u32(start + 4)}
         elif kind == "CModelPrototype":
             at = start + 16
-            at += 4 + 12 * u32(at)                             # the LOD levels
-            order = [u32(at + 4 + 4 * i) for i in range(u32(at))]   # the slot ids, in the model's order
+            at += 4 + 12 * u32(at)
+            order = [u32(at + 4 + 4 * i) for i in range(u32(at))]
             at += 4 + 4 * u32(at)
-            at += 4 + 8 * u32(at)                              # the slot names
+            at += 4 + 8 * u32(at)
             sets = [u32(at + 4 + 4 * i) for i in range(u32(at))]
             at += 4 + 4 * u32(at)
             out["prototypes"][index] = {
@@ -265,18 +181,18 @@ def model_manager(path: str | Path) -> dict:
                                    "meshes": [u32(at + 4 + 4 * i) for i in range(u32(at))]}
         elif kind == "CStringMapper":
             at = start + 4
-            for _ in range(u32(start)):                        # the slot names
+            for _ in range(u32(start)):
                 at = sized(at)[1] + 4
-            keys, count, at = {}, u32(at), at + 4              # every property key: a name, then its hash
+            keys, count, at = {}, u32(at), at + 4
             for _ in range(count):
                 name, at = sized(at)
                 keys[u32(at)] = name
                 at += 4
             count, at = u32(at), at + 4
-            for _ in range(count):                             # one enum: its key, then its values
+            for _ in range(count):
                 key, values, at = u32(at), u32(at + 4), at + 8
-                ordinals = {}                                  # not `names`: that one holds the entries
-                for _ in range(values):                        # name, then the ordinal as 64 bits
+                ordinals = {}
+                for _ in range(values):
                     name, at = sized(at)
                     ordinals[name] = u32(at)
                     at += 8
@@ -306,9 +222,6 @@ def model_manager(path: str | Path) -> dict:
 
 
 def mesh_entry(path: str | Path, template: str, part: str) -> dict | None:
-    """The `CMeshEntry` a template draws a part with: of the entries the
-    template assigns, the one that is the part itself or that a `CMesh` of the
-    part's name links. None when the table names none, or more than one."""
     manager = model_manager(path)
     assigned = {e.lower() for e in manager["templates"].get(template.lower(), ())}
     stem = PureWindowsPath(part).stem.lower()
@@ -316,9 +229,8 @@ def mesh_entry(path: str | Path, template: str, part: str) -> dict | None:
     return manager["entries"].get(next(iter(found))) if len(found) == 1 else None
 
 
+# MdlMan::GetHashValue @c71ab0 decomp
 def hash_name(name: str) -> int:
-    """`MdlMan::GetHashValue` @c71ab0: h = (h * 33 + c) mod 0xFFFFFFFF over the signed chars.
-    A `CMesh` keys its entries by it and a `CSlot`'s id is it."""
     h = 0
     for byte in name.encode("latin-1"):
         h = ((h * 33 + (byte - 256 if byte > 127 else byte)) & 0xFFFFFFFF) % 0xFFFFFFFF
@@ -331,17 +243,8 @@ def prototype_named(path: str | Path, prototype: str) -> dict | None:
                 None)
 
 
+# MdlMan::CModel::AttachPart @c79ce0, MdlMan::CModelPrototype::GetDescriptorByName @c99290, MdlMan::CSlot::GetDescriptor @1093030 decomp
 def equipment(path: str | Path, prototype: str, name: str, slot: str | None = None) -> dict | None:
-    """What a model of `prototype` draws for the equipment `name` in `slot`, as `CModel::AttachPart`
-    @c79ce0 finds it: `CModelPrototype::GetDescriptorByName` @c99290 walks the prototype's slots --
-    only `slot`, or every one when the name is no slot of it (`GetSlotID` 0) -- and in each the
-    linked meshes in order (`CSlot::GetDescriptor` @1093030); the first `CMesh` whose entries hold
-    `hash_name(name)` wins (`CMesh::GetMeshEntry` @c97a40). No property is matched on this path.
-
-    The file is `<prototype>\\Meshes\\<node>.nif` for a skinned mesh and `Attachables\\<node>.nif`
-    for a rigid one, under `Win32/Characters` (`CModel::HandleObjectAdded` @c7e160); the mesh's own
-    file name is never loaded. A rigid part hangs under its slot's attach node
-    (`CModel::SetupMeshData` @c7ef20). None when no slot holds it."""
     found = prototype_named(path, prototype)
     if found is None or not name:
         return None
@@ -359,10 +262,9 @@ def equipment(path: str | Path, prototype: str, name: str, slot: str | None = No
     return None
 
 
+# MdlMan::CSlot::GetDescriptor @1093030 decomp
 @lru_cache(maxsize=64)
 def slot_contents(path: str | Path, prototype: str) -> dict:
-    """A prototype's slots in its own order, each with its attach node and, by entry name hash,
-    the first linked `CMesh` holding that entry (`CSlot::GetDescriptor` @1093030)."""
     manager = model_manager(path)
     found = prototype_named(path, prototype)
     out = {}
@@ -380,8 +282,6 @@ def slot_contents(path: str | Path, prototype: str) -> dict:
 
 
 def part_path(game_root: str | Path, part: dict) -> Path:
-    """The file an `equipment` part loads, found without regard to case as the game's file
-    system does."""
     path = Path(game_root) / "Win32" / "Characters"
     for step in PureWindowsPath(part["file"]).parts:
         path = next((p for p in path.iterdir() if p.name.lower() == step.lower()), path / step) \
@@ -389,10 +289,8 @@ def part_path(game_root: str | Path, part: dict) -> Path:
     return path
 
 
+# MdlMan::CModel::ProcessSkinnedGeometry @c7c4c0 decomp
 def read_part(game_root: str | Path, part: dict) -> Character:
-    """One `equipment` part as a character of one mesh, named by the engine path it loads, so a
-    skinned part finds its family's skeleton the way a `.cat` part does (`rig.shared_skeleton`)
-    and is bound to it by bone name (`CModel::ProcessSkinnedGeometry` @c7c4c0)."""
     path = part_path(game_root, part)
     model = read_asset(path)
     model.name = part["name"]
@@ -404,7 +302,6 @@ def read_part(game_root: str | Path, part: dict) -> Character:
 
 
 def read_character(path: str | Path) -> Character:
-    """Read a `.cat` into plain data. Knows nothing about Blender."""
     path = Path(path)
     nif = read_nif(path)
 
@@ -444,23 +341,11 @@ def read_character(path: str | Path) -> Character:
 
 
 def read_clips(path: str | Path) -> list[Clip]:
-    """The clips in a standalone `.kf` file, as a family's shared set holds."""
     return _sequences(read_nif(path))
 
 
+# MdlMan::CDialogWrapper::SetSequences @ca0aa0, MdlMan::CDialogWrapper::GetSequence @ca0840 decomp
 def read_dialog_clips(path: str | Path) -> dict[str, list[Clip]]:
-    """A dialog's `.dialog` pack: its clips by family, each named after the file it came from.
-
-    A pack is a KF of many sequences, each with one `NiStringExtraData`
-    `OriginalFilename`, `<family>\\Animations\\Custom\\<clip>.kf`, and the
-    engine finds a clip by that string, not by the sequence's name
-    (`MdlMan::CDialogWrapper::SetSequences` @ca0aa0, `GetSequence` @ca0840).
-    `nif.xml` reads that sequence's extra data as `DIV2 Ints`: block indices,
-    measured one each and each an `OriginalFilename` in all 18,849 sequences
-    of the 1,943 packs. The same name is often in several families (`Still`
-    in 13), and 4 sequences are named apart from their file
-    (`DZ_Patriarch_Still` is `DZ_Patriarch_Player_Still.kf`).
-    """
     nif = read_nif(path)
     out: dict[str, list[Clip]] = {}
     for s in nif.blocks:
