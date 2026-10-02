@@ -252,9 +252,9 @@ def _all(tree, name: str):
 
 def _selftest():
     import os
-    game = os.environ.get("DV2_GAME")
+    game = os.environ.get("DV2_EXTRACT")
     if not game:
-        print("set DV2_GAME to run the check")
+        print("set DV2_EXTRACT to run the check")
         return
     got = read(game, "Banditcamp", "Main")
     assert got["time"] == "Dawn", got["time"]
