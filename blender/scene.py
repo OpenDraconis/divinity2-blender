@@ -263,6 +263,26 @@ def bind_skin(obj, shape, armature_obj) -> int:
     return len(bones)
 
 
+def hang_on_bone(obj, armature_obj, bone_name: str) -> bool:
+    """A rigid shape under the bone of the node it hangs under in the file, where it
+    stays: the engine draws a shape at its parent node's world transform
+    (`NiAVObject::UpdateWorldData`), so it moves when a clip moves that node.
+
+    Blender parents to a bone's tail, and the object's own matrix is taken in that
+    frame, so the world the shape was built at is carried into it."""
+    bone = armature_obj.data.bones.get(bone_name) if bone_name else None
+    if bone is None:
+        return False
+    world = obj.matrix_world.copy()
+    obj.parent = armature_obj
+    obj.parent_type = "BONE"
+    obj.parent_bone = bone_name
+    tail = Matrix.Translation((0.0, bone.length, 0.0))
+    obj.matrix_parent_inverse = Matrix.Identity(4)
+    obj.matrix_basis = (armature_obj.matrix_world @ bone.matrix_local @ tail).inverted() @ world
+    return True
+
+
 def attach_to_bone(obj, armature_obj, bone_name: str) -> bool:
     """Carry a weapon on one bone instead of deforming it with the skeleton.
 

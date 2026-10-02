@@ -77,6 +77,8 @@ def import_asset(
     # Half the characters carry no skeleton: they share their family's.
     skeleton = rig.shared_skeleton(character, game_root)
     rest = None
+    if skeleton is None and with_animation and character.clips and len(character.meshes) == 1:
+        skeleton = _animated_tree(character)
 
     if skeleton is not None:
         rest = scene.rest_matrices(skeleton)
@@ -137,7 +139,7 @@ def import_asset(
                 obj, result.armature, bone
             ):
                 result.attached += 1
-            else:
+            elif not scene.hang_on_bone(obj, result.armature, _parent_node(drawn.path)):
                 # No socket for it. It still travels with the character.
                 obj.parent = result.armature
 
@@ -179,6 +181,23 @@ def import_asset(
             bpy.context.scene.frame_end = int(first.frame_range[1])
 
     return result
+
+
+def _animated_tree(character):
+    """An unskinned asset's own node tree, when its sequences drive it.
+
+    `CStreamableAssetData::GetActorManager` @1063180 builds the item's actor manager over
+    the streamed root, and `NiMultiTargetTransformController::Update` @63e070 moves the
+    NiNodes the sequences name whether any shape is skinned or not: a cave door turns its
+    `IT_Door_Cave_A` node, a barrel lifts its `Object01`. The armature is how those nodes
+    reach Blender, so the tree becomes one."""
+    return character.meshes[0].root
+
+
+def _parent_node(path: str) -> str:
+    """The node a shape hangs under, from its `graph.walk` path."""
+    parts = path.split("/")
+    return parts[-2] if len(parts) > 1 else ""
 
 
 def _factor(root) -> float:
