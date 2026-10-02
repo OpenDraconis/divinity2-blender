@@ -7,7 +7,7 @@ tagline = "Import Divinity II: Developer's Cut models and regions"
 maintainer = "divinity2-blender contributors"
 type = "add-on"
 
-website = "https://github.com/ygalsk/divinity2-blender"
+website = "https://github.com/OpenDraconis/divinity2-blender"
 
 tags = ["Import-Export"]
 
