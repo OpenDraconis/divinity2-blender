@@ -123,7 +123,7 @@ def descriptor(model_path) -> dict | None:
 GRAPHIC_OPTIONS = {"RenderMethod": 1, "StaticAssetHighQuality": 1}
 
 
-# CTerrainSplatRenderer::LoadXML @6ed7f0, CTerrainSplatRenderer::UpdateSplatDistance @6ec9d0 decomp
+# CTerrainSplatRenderer::LoadXML @6ed7f0 decomp, CTerrainSplatRenderer::UpdateSplatDistance @6ec9d0 decomp
 def splat(model_path, options=GRAPHIC_OPTIONS) -> dict:
     root = docs.read(Path(model_path).parent / DESCRIPTOR) if model_path else None
     node = next(iter(root.find_all("Terrain")), None) if root is not None else None

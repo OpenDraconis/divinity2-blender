@@ -139,7 +139,7 @@ def import_asset(
     return result
 
 
-# CStreamableAssetData::GetActorManager @1063180, NiMultiTargetTransformController::Update @63e070 decomp
+# CStreamableAssetData::GetActorManager @1063180 decomp, NiMultiTargetTransformController::Update @63e070 decomp
 def _animated_tree(character):
     return character.meshes[0].root
 

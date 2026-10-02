@@ -29,11 +29,11 @@ def stem(texture_name: str) -> str:
     return PureWindowsPath(str(texture_name)).stem
 
 
-# StreamLib::CTexturePalette::GetTextureWrapper @10dca00 decomp
+# CTexturePalette::GetTextureWrapper @10dca00 decomp
 MISSING = "_black"
 
 
-# StreamLib::CTextureManager::ParsePersistentTextureCollection @10d3a70 decomp
+# CTextureManager::ParsePersistentTextureCollection @10d3a70 decomp
 @lru_cache(maxsize=8)
 def shipped(game_root: Path) -> frozenset:
     path = Path(game_root) / TEXTURE_DIR / "Textures.bin"

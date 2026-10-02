@@ -118,7 +118,7 @@ def _float_keys(interpolator) -> dict:
     return {"type": kind, "keys": keys}
 
 
-# NiTextureTransformController::Update @636840, NiTimeController::ComputeScaledTime @54cd60 decomp
+# NiTextureTransformController::Update @636840 decomp, NiTimeController::ComputeScaledTime @54cd60 decomp
 def _texture_controllers(texturing, maps: dict, shader_maps: list) -> None:
     ctlr = getattr(texturing, "controller", None)
     while ctlr is not None:
@@ -173,7 +173,7 @@ def _extra(block):
     return {"unread": kind}
 
 
-# MdlMan::CMeshWrapper::SetupTexturingProperty @c9de80 decomp
+# CMeshWrapper::SetupTexturingProperty @c9de80 decomp
 PART_SLOTS = {"base": "_DM", "gloss": "_SM", "glow": "_GM", "normal": "_NM"}
 
 def rebind(maps: dict, entry: dict, known, has_nbt: bool) -> dict:

@@ -9,7 +9,7 @@ BSPLINE_INTERPOLATOR = "NiBSplineCompTransformInterpolator"
 TRANSFORM_INTERPOLATOR = "NiTransformInterpolator"
 
 
-# NiBSplineBasis<float,3>::Compute @652dc0 decomp
+# NiBSplineBasis::Compute @652dc0 decomp
 def evaluate(control_points: list, at: float) -> tuple:
     n = len(control_points)
     if n == 0:
@@ -160,7 +160,7 @@ def _scale(a, k):
     return tuple(k * x for x in a)
 
 
-# NiPosKey::GenInterp @620540, NiFloatKey::GenInterp @621b70, NiRotKey::GenInterp @6250c0 decomp
+# NiPosKey::GenInterp @620540 decomp, NiFloatKey::GenInterp @621b70 decomp, NiRotKey::GenInterp @6250c0 decomp
 @dataclass
 class Curve:
     kind: str
@@ -193,7 +193,7 @@ class Curve:
             return squad(u, p0, self.a[i], self.b[i + 1], p1)
         raise ValueError(f"key type {self.kind} is not interpolated")
 
-    # NiBezPosKey::LoadBinary @626370, NiTCBPosKey::FillDerivedVals @6241c0, NiTCBFloatKey::FillDerivedVals @61ed20 decomp
+    # NiBezPosKey::LoadBinary @626370 decomp, NiTCBPosKey::FillDerivedVals @6241c0 decomp, NiTCBFloatKey::FillDerivedVals @61ed20 decomp
     @classmethod
     def read(cls, group) -> "Curve | None":
         if group is None or not int(getattr(group, "num_keys", 0) or 0):
@@ -300,7 +300,7 @@ def _exp(q):
     return (math.cos(angle), k * q[1], k * q[2], k * q[3])
 
 
-# NiRotKey::FillDerivedVals @625450, NiLinRotKey::Interpolate @620cd0, NiTCBRotKey::CalculateDVals @6211b0 decomp
+# NiRotKey::FillDerivedVals @625450 decomp, NiLinRotKey::Interpolate @620cd0 decomp, NiTCBRotKey::CalculateDVals @6211b0 decomp
 def _rotations(data) -> Curve | None:
     keys = list(getattr(data, "quaternion_keys", None) or ())
     if not keys:

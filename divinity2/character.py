@@ -112,7 +112,7 @@ def read_asset(path: str | Path) -> Character:
 MESH_ENTRIES = "MdlManBinary.nif"
 
 
-# MdlMan::CModelPrototype::LoadBinary @c99900, MdlMan::CModelTemplate::LoadBinary @c9c8a0, MdlMan::CMesh::LoadBinary @c97ca0 decomp
+# CModelPrototype::LoadBinary @c99900 decomp, CModelTemplate::LoadBinary @c9c8a0 decomp, CMesh::LoadBinary @c97ca0 decomp
 @lru_cache(maxsize=4)
 def model_manager(path: str | Path) -> dict:
     path = Path(path)
@@ -243,7 +243,7 @@ def prototype_named(path: str | Path, prototype: str) -> dict | None:
                 None)
 
 
-# MdlMan::CModel::AttachPart @c79ce0, MdlMan::CModelPrototype::GetDescriptorByName @c99290, MdlMan::CSlot::GetDescriptor @1093030 decomp
+# CModel::AttachPart @c79ce0 decomp, CModelPrototype::GetDescriptorByName @c99290 decomp, CSlot::GetDescriptor @1093030 decomp
 def equipment(path: str | Path, prototype: str, name: str, slot: str | None = None) -> dict | None:
     found = prototype_named(path, prototype)
     if found is None or not name:
@@ -262,7 +262,7 @@ def equipment(path: str | Path, prototype: str, name: str, slot: str | None = No
     return None
 
 
-# MdlMan::CSlot::GetDescriptor @1093030 decomp
+# CSlot::GetDescriptor @1093030 decomp
 @lru_cache(maxsize=64)
 def slot_contents(path: str | Path, prototype: str) -> dict:
     manager = model_manager(path)
@@ -289,7 +289,7 @@ def part_path(game_root: str | Path, part: dict) -> Path:
     return path
 
 
-# MdlMan::CModel::ProcessSkinnedGeometry @c7c4c0 decomp
+# CModel::ProcessSkinnedGeometry @c7c4c0 decomp
 def read_part(game_root: str | Path, part: dict) -> Character:
     path = part_path(game_root, part)
     model = read_asset(path)
@@ -344,7 +344,7 @@ def read_clips(path: str | Path) -> list[Clip]:
     return _sequences(read_nif(path))
 
 
-# MdlMan::CDialogWrapper::SetSequences @ca0aa0, MdlMan::CDialogWrapper::GetSequence @ca0840 decomp
+# CDialogWrapper::SetSequences @ca0aa0 decomp, CDialogWrapper::GetSequence @ca0840 decomp
 def read_dialog_clips(path: str | Path) -> dict[str, list[Clip]]:
     nif = read_nif(path)
     out: dict[str, list[Clip]] = {}

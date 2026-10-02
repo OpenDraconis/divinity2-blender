@@ -103,7 +103,7 @@ def _settings(collection) -> dict:
     return out
 
 
-# CAtmosphereFloatSetting::Apply @109a870, CAtmosphere::Update @6d0fd0 decomp
+# CAtmosphereFloatSetting::Apply @109a870 decomp, CAtmosphere::Update @6d0fd0 decomp
 def frame(read_out: dict) -> dict:
     atmosphere = read_out.get("atmosphere.xml")
     top = find(atmosphere, "atmosphere") if atmosphere is not None else None

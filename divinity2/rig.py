@@ -19,7 +19,7 @@ def prototypes(character) -> list[str]:
     return seen
 
 
-# MdlMan::CWrapperMan::GetWrapperInstance @c864d0 decomp
+# CWrapperMan::GetWrapperInstance @c864d0 decomp
 def prototype_of(character, game_root) -> str | None:
     for name in prototypes(character):
         if (Path(game_root) / CHARACTERS / name / SKELETON_FILE).is_file():
@@ -57,7 +57,7 @@ def animation_set(character):
 NPC_ACTION_BANKS = ("Base", "DialogSimple", "Die", "Skills", "Idle", "Melee")
 
 
-# CKFMRegisterLayer::HandlePropertyChange @6c8ae0, CKFMRegisterLayer::CollectKFMDescriptors @6c8950, MdlMan::CProperty::CheckValues @471a80 decomp
+# CKFMRegisterLayer::HandlePropertyChange @6c8ae0 decomp, CKFMRegisterLayer::CollectKFMDescriptors @6c8950 decomp, CProperty::CheckValues @471a80 decomp
 def engine_clip_files(template: str, game_root, actions=NPC_ACTION_BANKS,
                       weapons=None, states=("Default", "Normal")) -> list[Path]:
     from . import character as dv2_character

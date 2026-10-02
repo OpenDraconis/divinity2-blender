@@ -8,7 +8,7 @@ from . import material as dv2_material
 
 SYSTEMS = ("NiParticleSystem", "NiMeshParticleSystem")
 
-# CheckWaterSplashProperty @6cbde0, HasOrientationEffectProperty @6cbb70, CheckRefractionEffect @6cbd20 decomp
+# CheckWaterSplashProperty @6cbde0 decomp, HasOrientationEffectProperty @6cbb70 decomp, CheckRefractionEffect @6cbd20 decomp
 MARKERS = ("WaterSplash", "OrientationEffect", "Refraction")
 
 
@@ -44,7 +44,7 @@ def _nodes(root):
     return out
 
 
-# DivTools::CGBTools::GetExtraDataValue @108ab20 decomp
+# CGBTools::GetExtraDataValue @108ab20 decomp
 def _prop(props: str, key: str) -> str | None:
     found = re.search(re.escape(key) + r'[^"]*"([^"]*)"', props)
     return found.group(1) if found else None
@@ -63,7 +63,7 @@ def _refraction(props: str) -> dict | None:
     return {"normal_map": _prop(props, "NormalMap"), "power": power}
 
 
-# CheckWaterSplashEffect @6cbe40, WaterSplashTriShape::SetupShaderMaps @116a0b0 decomp
+# CheckWaterSplashEffect @6cbe40 decomp, WaterSplashTriShape::SetupShaderMaps @116a0b0 decomp
 def _splash(markers: list) -> dict | None:
     return {"normal_map": "FX_WaterSplash_A_NM"} if "WaterSplash" in markers else None
 
