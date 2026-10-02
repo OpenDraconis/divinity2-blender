@@ -15,7 +15,7 @@ blender_version_min = "5.2.0"
 
 wheels = [
   "./wheels/nifgen-2026.9.15+dv2-py3-none-any.whl",
-  "./wheels/divinity2_lib-0.2.0-py3-none-any.whl",
+  "./wheels/divinity2_lib-0.3.0-py3-none-any.whl",
 ]
 
 license = ["SPDX:GPL-3.0-or-later"]

@@ -29,10 +29,10 @@ wheels/nifgen-2026.9.15+dv2-py3-none-any.whl
     https://github.com/niftools/nifgen
     https://github.com/niftools/nifxml
 
-wheels/divinity2_lib-0.2.0-py3-none-any.whl
+wheels/divinity2_lib-0.3.0-py3-none-any.whl
     divinity2-lib, the Divinity II archive, binary XML and name table readers.
     Copyright (c) 2026 ygalsk. Licensed under the MIT License; the full text
-    is in divinity2_lib-0.2.0.dist-info/licenses/LICENSE inside the wheel.
+    is in divinity2_lib-0.3.0.dist-info/licenses/LICENSE inside the wheel.
 
     https://github.com/ygalsk/divinity2-lib
 
