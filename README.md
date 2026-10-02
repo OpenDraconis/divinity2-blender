@@ -22,7 +22,7 @@ A Blender add-on that imports the models and whole regions of
 ## Install
 
 1. Download `divinity2-<version>.zip` from
-   [Releases](https://github.com/ygalsk/divinity2-blender/releases).
+   [Releases](https://github.com/OpenDraconis/divinity2-blender/releases).
 2. In Blender: *Edit > Preferences > Get Extensions*, open the drop-down menu
    in the top right, choose *Install from Disk…* and pick the zip.
 3. Still in Preferences, expand the **Divinity II** add-on, set **Game folder**
@@ -44,7 +44,13 @@ thousands of objects. Banditcamp with everything takes about 50 seconds.
 
 To get a model out again, use Blender's own glTF or FBX export.
 
-The full guide is [docs/using-it.md](docs/using-it.md).
+The full guide is [docs/using-it.md](docs/using-it.md). What the engine and its formats do:
+[engine/](engine/).
+
+This add-on is for looking at the game in Blender. The Unity port,
+[divinity2-port](https://github.com/OpenDraconis/divinity2-port), uses its readers headless from
+`../divinity2-blender`; its README is where to start for the port, and its export never runs
+from the Blender GUI.
 
 ## Known limitations
 
@@ -62,7 +68,7 @@ The full guide is [docs/using-it.md](docs/using-it.md).
   [NifTools](https://github.com/niftools/nifxml) format description
   (BSD-3-Clause), bundled as a wheel.
 - Archives and the game's binary XML are read by
-  [divinity2-lib](https://github.com/ygalsk/divinity2-lib) (MIT), bundled as a
+  [divinity2-lib](https://github.com/OpenDraconis/divinity2-lib) (MIT), bundled as a
   wheel; `python -m dv2lib unpack` unpacks the game from the command line.
 - Details are in [NOTICE](NOTICE).
 

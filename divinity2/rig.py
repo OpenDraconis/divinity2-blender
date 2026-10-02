@@ -1,21 +1,3 @@
-"""The shared rig.
-
-Half the characters carry no skeleton and no clips of their own. They are not
-broken: they share a rig with every other character of their prototype. 105 human
-characters run on one `HumanMale` skeleton, and a Froblin has five animation
-sets to pick from.
-
-A character's prototype (`CModelPrototype`) is the first segment of its mesh entries' paths --
-`HumanMale\\Meshes\\M_Torso_A.nif` is prototype `HumanMale` -- and the prototype's
-files live in `Win32/Characters/<prototype>/`:
-
-    Skeleton.nif          the skeleton every character of the prototype uses
-    <set>.kfm             one animation set: which clips, and how they join
-    <set>.kf              the clips themselves
-
-`Attachables` is not a prototype. It is where the weapons live.
-"""
-
 from pathlib import Path
 
 from . import kfm
@@ -24,12 +6,10 @@ from .nif import read_nif
 CHARACTERS = Path("Win32") / "Characters"
 SKELETON_FILE = "Skeleton.nif"
 
-#: A path segment that names a place, not a `CModelPrototype`.
 NOT_A_PROTOTYPE = {"attachables"}
 
 
 def prototypes(character) -> list[str]:
-    """The `CModelPrototype` folders a character's meshes come from, most likely first."""
     seen = []
     for mesh in character.meshes:
         head = str(mesh.name).replace("\\", "/").split("/")[0]
@@ -39,9 +19,8 @@ def prototypes(character) -> list[str]:
     return seen
 
 
+# CWrapperMan::GetWrapperInstance @c864d0 decomp
 def prototype_of(character, game_root) -> str | None:
-    """The `CModelPrototype` that actually owns a skeleton on disk (`Win32/Characters/<prototype>/Skeleton.nif`,
-    pooled per prototype by `MdlMan::CWrapperMan::GetWrapper` @c864d0)."""
     for name in prototypes(character):
         if (Path(game_root) / CHARACTERS / name / SKELETON_FILE).is_file():
             return name
@@ -56,7 +35,6 @@ def skeleton_path(character, game_root) -> Path | None:
 
 
 def shared_skeleton(character, game_root):
-    """The prototype's skeleton as a NiNode, or None when it owns one already."""
     if character.skeleton is not None:
         return character.skeleton
     path = skeleton_path(character, game_root)
@@ -67,7 +45,6 @@ def shared_skeleton(character, game_root):
 
 
 def animation_set(character):
-    """The character's own KFM, parsed. See `divinity2.kfm`."""
     if not character.animation_set:
         return None
     try:
@@ -76,28 +53,13 @@ def animation_set(character):
         return None
 
 
-#: `DecideAnimBanks` @838440 for an NPC: these action banks are on (Idle in peace, Melee in combat),
-#: never ComplexDialog, Ladder, Swim or Custom (measured in the running game; divinity2-port's notes, character-animation.md 1.1).
+# CRpgStats_V2_Character::DecideAnimBanks @838440 decomp
 NPC_ACTION_BANKS = ("Base", "DialogSimple", "Die", "Skills", "Idle", "Melee")
 
 
+# CKFMRegisterLayer::HandlePropertyChange @6c8ae0 decomp, CKFMRegisterLayer::CollectKFMDescriptors @6c8950 decomp, CProperty::CheckValues @471a80 decomp
 def engine_clip_files(template: str, game_root, actions=NPC_ACTION_BANKS,
                       weapons=None, states=("Default", "Normal")) -> list[Path]:
-    """The `.kf` files the engine can play for a model of that template.
-
-    The character's own KFM is one bank of many: the rest come from its
-    `CModelPrototype`'s `CKFMDescriptor`s, chosen per action bank
-    (`CKFMRegisterLayer::HandlePropertyChange` @0x6c8ae0 ->
-    `CollectKFMDescriptors` @0x6c8950). A descriptor matches when every
-    property of the query shares a bit with the descriptor's
-    (`CProperty::CheckValues` @0x471a80), and a key the descriptor lacks
-    matches anything; when one action bank finds nothing, `Default` is added to
-    the query's `SubClass` and it is asked again, so a sub-class KFM hides the
-    prototype's default one.
-
-    `weapons` defaults to every weapon set, which is every set a character of
-    this template could reach; `states` is the posture bank plus `Default`.
-    """
     from . import character as dv2_character
 
     game_root = Path(game_root)
@@ -114,7 +76,7 @@ def engine_clip_files(template: str, game_root, actions=NPC_ACTION_BANKS,
         values = enums[key]["values"]
         return sum(1 << values[n] for n in names if n in values)
 
-    query = dict(groups.get(template_info["properties"], {}))     # Class and SubClass
+    query = dict(groups.get(template_info["properties"], {}))
     query[enums["WeaponType"]["key"]] = mask("WeaponType", weapons) if weapons else (1 << 7) - 1
     query[enums["StateType"]["key"]] = mask("StateType", states)
     sub_class, animation = enums["SubClass"]["key"], enums["AnimationType"]
@@ -153,11 +115,6 @@ def engine_clip_files(template: str, game_root, actions=NPC_ACTION_BANKS,
 
 
 def clip_files(character, game_root) -> list[Path]:
-    """The `.kf` files the character's own KFM names, resolved on disk.
-
-    The KFM writes the names the way the game sees them -- `.\\Froblin_Base.kf`,
-    relative to the prototype's folder -- so only the last segment is used.
-    """
     name = prototype_of(character, game_root)
     if name is None:
         return []

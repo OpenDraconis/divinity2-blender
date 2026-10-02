@@ -1,46 +1,16 @@
-"""Clips.
-
-A Divinity II clip does not store a key per frame. It stores the control
-points of a cubic B-spline, quantised to 16-bit integers, and the game
-evaluates the curve as it plays. This is why a keyframe importer reads such a
-clip and finds nothing: there are no keyframes in it to find.
-
-`nifgen` already undoes the quantisation -- `get_translations`,
-`get_rotations`, `get_scales` hand back the control points as floats. What is
-left is evaluating the curve through them, which is what this module does.
-
-A track whose handle reads `NO_HANDLE` is not animated at all; the
-interpolator's own static transform is the value for the whole clip.
-"""
-
 import math
 from dataclasses import dataclass, field
 
-#: A handle of 0xFFFF means "this track is not animated".
 NO_HANDLE = 65535
 
-#: Gamebryo's B-splines are cubic.
 DEGREE = 3
 
 BSPLINE_INTERPOLATOR = "NiBSplineCompTransformInterpolator"
 TRANSFORM_INTERPOLATOR = "NiTransformInterpolator"
 
 
+# NiBSplineBasis::Compute @652dc0 decomp
 def evaluate(control_points: list, at: float) -> tuple:
-    """A cubic B-spline through `control_points`, at 0.0 <= at <= 1.0.
-
-    The control points are not points on the curve; each span is a weighted
-    blend of four of them. Treating them as keyframes -- which is the tempting
-    shortcut -- gives an animation that is close but wrong, and wrong in a way
-    that looks like bad rigging rather than bad maths.
-
-    The knots are open uniform, clamped at both ends: `0,0,0,0,1,...,n-4,
-    n-3,n-3,n-3,n-3` over `n` points, so the curve starts on the first point
-    and ends on the last. That is `NiBSplineBasis<float,3>::Compute` @652dc0,
-    whose first and last spans weigh with 1 and 1/2 where the inner ones
-    weigh with 1/2 and 1/3. The unclamped basis missed both ends, so a
-    looping clip jumped at every cycle.
-    """
     n = len(control_points)
     if n == 0:
         return ()
@@ -72,13 +42,11 @@ def evaluate(control_points: list, at: float) -> tuple:
 
 @dataclass
 class Track:
-    """What one bone does over one clip."""
-
     node: str
     translations: list = field(default_factory=list)
     rotations: list = field(default_factory=list)
     scales: list = field(default_factory=list)
-    static: object = None  # NiQuatTransform, when a track is not animated
+    static: object = None
     keys: "Keys | None" = None
     begin: float = 0.0
     end: float = 0.0
@@ -89,7 +57,6 @@ class Track:
 
 
 def _as_lists(interpolator):
-    """Control points, or empty where the handle says the track is static."""
     def maybe(handle, get, wrap):
         if handle == NO_HANDLE:
             return []
@@ -104,50 +71,21 @@ def _as_lists(interpolator):
 
 @dataclass
 class Event:
-    """A named moment in a clip, from its `NiTextKeyExtraData`."""
-
     time: float
     text: str
 
 
 def events(sequence) -> list[Event]:
-    """What the clip says happens, and when.
-
-    Every clip is bracketed by `start` and `end`. The rest is a small grammar,
-    and it is worth knowing which half of it belongs to whom:
-
-    `morph:` is Gamebryo's, not Divinity's. `NiControllerSequence` looks it up
-    in `FindCorrespondingMorphFrame` and `VerifyMatchingMorphKeys`: a
-    `morph: L_Foot_Down` on a walk and the same label on a run mark the frames
-    that must be lined up when one blends into the other. It is a blend
-    alignment point, and only incidentally the frame a foot lands on.
-
-    `eq=` and `ue=` are Divinity's, and they drive equipment:
-    `eq=handR:2H_Sword_Alguard` puts an item in a slot, `ue=weaponSlotBack`
-    takes it out again. The slot resolves to a bone through the engine's own
-    table -- see `divinity2/engine.py`. `s=Footstep_Walk` plays a sound, and a
-    bare `v=-5` ramps a value as a body falls.
-
-    They are carried through as pose markers so the timing survives the trip
-    into another engine, where it would otherwise have to be re-authored by
-    eye.
-    """
     keys = getattr(sequence, "text_keys", None)
     if keys is None:
         return []
     return [Event(time=float(k.time), text=str(k.value)) for k in keys.text_keys]
 
 
-#: A component the file does not carry is written as -FLT_MAX, not left out.
-#: `trs_valid`, which is supposed to say which of the three are present, is an
-#: empty array at NIF 20.3.0.9 -- the version does not write it. The sentinel
-#: in the value is the only thing that tells the truth.
 INVALID = 3.4028234663852886e38
 
 
 def sample(track: Track, at: float) -> tuple:
-    """`(translation, rotation wxyz, scale)` of one track at `0 <= at <= 1`, in the
-    file's own units. A component the track neither animates nor states is None."""
     static = track.static
     t = r = s = None
     if static is not None:
@@ -174,7 +112,6 @@ def sample(track: Track, at: float) -> tuple:
 
 
 def tracks(sequence) -> list[Track]:
-    """One track per controlled block of a `NiControllerSequence`."""
     out = []
     for block in sequence.controlled_blocks:
         interpolator = block.interpolator
@@ -223,24 +160,9 @@ def _scale(a, k):
     return tuple(k * x for x in a)
 
 
+# NiPosKey::GenInterp @620540 decomp, NiFloatKey::GenInterp @621b70 decomp, NiRotKey::GenInterp @6250c0 decomp
 @dataclass
 class Curve:
-    """One key array of an `NiTransformData`, as the engine interpolates it.
-
-    `NiPosKey::GenInterp` @620540, `NiFloatKey::GenInterp` @621b70 and
-    `NiRotKey::GenInterp` @6250c0: one key holds; else the two keys around the
-    time, and the time normalised between them goes to the key type's
-    `Interpolate`. Before the first key that is the first two keys, their
-    curve carried on backwards, as the engine does; past the last key the
-    engine reads past its array, and here the last key holds.
-
-    `values` are tuples; `ins` and `outs` the tangents a Hermite key type
-    blends with (`NiInterpScalar::Bezier` @65cd90 and `TCB` @65ce00 are one
-    formula; `NiBezPosKey::Interpolate` @6264b0 and `NiTCBPosKey::Interpolate`
-    @623d20 are it with the coefficients `FillDerivedVals` @626710 / @6241c0
-    stores).
-    """
-
     kind: str
     times: list
     values: list
@@ -271,12 +193,9 @@ class Curve:
             return squad(u, p0, self.a[i], self.b[i + 1], p1)
         raise ValueError(f"key type {self.kind} is not interpolated")
 
+    # NiBezPosKey::LoadBinary @626370 decomp, NiTCBPosKey::FillDerivedVals @6241c0 decomp, NiTCBFloatKey::FillDerivedVals @61ed20 decomp
     @classmethod
     def read(cls, group) -> "Curve | None":
-        """A `KeyGroup` of positions or floats: LINEAR, QUADRATIC (`forward` is the
-        engine's `m_InTan`, `backward` its `m_OutTan`: `NiBezPosKey::LoadBinary`
-        @626370) or TBC (`NiTCBPosKey::FillDerivedVals` @6241c0,
-        `NiTCBFloatKey::FillDerivedVals` @61ed20)."""
         if group is None or not int(getattr(group, "num_keys", 0) or 0):
             return None
         kind = _kind(group.interpolation)
@@ -292,11 +211,8 @@ class Curve:
         return curve
 
 
+# NiTCBPosKey::CalculateDVals @623f80 decomp
 def _tcb_tangents(times, values, tbcs):
-    """`NiTCBPosKey::CalculateDVals` @623f80 per key, over its neighbours; the
-    first and last key mirror their one neighbour, at a time step of 1. The file
-    holds tension, continuity, bias in that order (`NiTCBPosKey::LoadBinary`),
-    which nifgen names `t`, `b`, `c`."""
     n = len(values)
     ins, outs = [], []
     for i, p in enumerate(values):
@@ -318,13 +234,11 @@ def _tcb_tangents(times, values, tbcs):
     return ins, outs
 
 
-#: `NiQuaternion::FastNormalize` @5816d0 and its constants, set by the static
-#: initialisers at 0x11bd850 / 0x11bd870 from the doubles at 0x1208ec8 and 0x1208ef0.
+# NiQuaternion::FastNormalize @5816d0 decomp
 ISQRT_NEIGHBORHOOD = 0.9590659737586975
 ISQRT_SCALE = 1.0003110170364380
 ISQRT_ADDITIVE_CONSTANT = ISQRT_SCALE / ISQRT_NEIGHBORHOOD ** 0.5
 ISQRT_FACTOR = ISQRT_SCALE * (-0.5 / (ISQRT_NEIGHBORHOOD ** 0.5 * ISQRT_NEIGHBORHOOD))
-#: `NiQuaternion::ms_fEpsilon` (0x3a83126f).
 EPSILON = 0.001
 
 
@@ -338,26 +252,26 @@ def _fast_normalize(q):
     return _scale(q, k)
 
 
+# NiQuaternion::CounterWarp @5817d0 decomp
 def _counter_warp(t, cos):
-    """`NiQuaternion::CounterWarp` @5817d0."""
     k = 0.5854921936988831 * (1.0 - cos * 0.8227968811988831) ** 2
     return (((t + t) - 3.0) * t * k + 1.0 + k) * t
 
 
+# NiQuaternion::Slerp @581970 decomp
 def slerp(t, p, q):
-    """`NiQuaternion::Slerp` @581970: a counter-warped lerp, fast-normalised; wxyz."""
     cos = sum(a * b for a, b in zip(p, q))
     w = 1.0 - _counter_warp(1.0 - t, cos) if t > 0.5 else _counter_warp(t, cos)
     return _fast_normalize(tuple(a + w * (b - a) for a, b in zip(p, q)))
 
 
+# NiQuaternion::Squad @581c10 decomp
 def squad(t, p, a, b, q):
-    """`NiQuaternion::Squad` @581c10."""
     return slerp((t + t) * (1.0 - t), slerp(t, p, q), slerp(t, a, b))
 
 
+# NiQuaternion::operator* @581b50 decomp
 def _mul(p, q):
-    """`NiQuaternion::operator*` @581b50, Hamilton, wxyz."""
     pw, px, py, pz = p
     qw, qx, qy, qz = q
     return (pw * qw - px * qx - py * qy - pz * qz,
@@ -370,28 +284,24 @@ def _inverse(q):
     return (q[0], -q[1], -q[2], -q[3])
 
 
+# NiQuaternion::Log @581cb0 decomp
 def _log(q):
-    """`NiQuaternion::Log` @581cb0."""
     angle = math.pi if q[0] <= -1.0 else 0.0 if q[0] >= 1.0 else math.acos(q[0])
     sin = math.sin(angle)
     k = angle / sin if abs(sin) >= EPSILON else 1.0
     return (0.0, k * q[1], k * q[2], k * q[3])
 
 
+# NiQuaternion::Exp @5818a0 decomp
 def _exp(q):
-    """`NiQuaternion::Exp` @5818a0."""
     angle = math.sqrt(q[1] ** 2 + q[2] ** 2 + q[3] ** 2)
     sin = math.sin(angle)
     k = sin / angle if abs(sin) >= EPSILON else 1.0
     return (math.cos(angle), k * q[1], k * q[2], k * q[3])
 
 
+# NiRotKey::FillDerivedVals @625450 decomp, NiLinRotKey::Interpolate @620cd0 decomp, NiTCBRotKey::CalculateDVals @6211b0 decomp
 def _rotations(data) -> Curve | None:
-    """Quaternion keys: `NiRotKey::FillDerivedVals` @625450 turns each key to the
-    side of the one before and clamps w to [-1, 1]; LINEAR slerps
-    (`NiLinRotKey::Interpolate` @620cd0), TBC squads between the intermediates
-    `NiTCBRotKey::CalculateDVals` @6211b0 makes (`FillDerivedVals` @621430: the
-    first key is its own predecessor, the last its own successor)."""
     keys = list(getattr(data, "quaternion_keys", None) or ())
     if not keys:
         return None
@@ -427,12 +337,9 @@ def _rotations(data) -> Curve | None:
     return curve
 
 
+# NiTransformInterpolator::Update @635cb0 decomp
 @dataclass
 class Keys:
-    """An `NiTransformData`, as `NiTransformInterpolator::Update` @635cb0 reads it:
-    each of translation, rotation and scale that has keys is interpolated at the
-    sequence's time; one without keys keeps the interpolator's own value."""
-
     translation: Curve | None = None
     rotation: Curve | None = None
     euler: tuple = ()
@@ -448,11 +355,8 @@ class Keys:
                 keys.rotation = _rotations(data)
         return keys
 
+    # NiEulerRotKey::Interpolate @61f530 decomp
     def at(self, time: float) -> tuple:
-        """`(translation, rotation wxyz, scale)`, None for a component without keys.
-
-        `NiEulerRotKey::Interpolate` @61f530: each axis's float keys at the time,
-        0 for an axis without keys, made a quaternion from the half angles."""
         t = self.translation.at(time) if self.translation else None
         s = self.scale.at(time)[0] if self.scale else None
         r = self.rotation.at(time) if self.rotation else None

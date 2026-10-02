@@ -1,33 +1,7 @@
-"""A model's own animation, whole, as plain data: its node tree and every
-`NiControllerSequence` it carries.
-
-An effect, a scenery item or a fortress is a `CStreamableAssetData`: a node
-tree and, when its flag is set, an embedded KFM whose animations name the
-sequences in the block's own list (`CStreamableAssetData::GetActorManager`
-@1063180 builds the actor manager from it, not cumulative, so every controlled
-block drives the node it names). The engine plays one by its KFM event code
-(`CAnimationPlayer::PlayAnimation` @6cb270). The port runs the sequences itself,
-so this hands over what they drive and every key, and leaves the rules to the
-consumer:
-
-- `nodes`: every `NiAVObject` in file order, depth first, with its parent's
-  index, its own transform in the file's units, its `NiBillboardNode` mode
-  (`NiBillboardNode::LoadBinary` @5accc0 reads it into the flags,
-  `RotateToCamera` @5ac4b0 takes the low three bits), and what the sequences
-  can reach through it: its `NiGeomMorpherController`'s targets, its
-  `NiFlipController`s' pictures, its `NiFloatExtraData`.
-- `sequences`: per sequence its KFM id, cycle, frequency, key span, text keys
-  and controlled blocks, each with its interpolator as data (`_interpolator`).
-
-B-spline interpolators arrive as their control points, dequantised by
-`nifgen` (`get_translations` and the rest); the consumer evaluates them as
-`animation.evaluate` does.
-"""
 
 from . import kfm, lod
 from . import texture as dv2_texture
 
-#: A handle of 0xFFFF means "this channel is not animated" (`animation.NO_HANDLE`).
 NO_HANDLE = 65535
 
 
@@ -50,9 +24,6 @@ def _key_value(value):
 
 
 def _keys(group) -> dict | None:
-    """A `KeyGroup` as `{"type", "keys"}`, each key `[time, value, forward,
-    backward]` or, for TBC keys, `[time, value, tension, bias, continuity]`;
-    None when it holds no key."""
     if group is None or not int(getattr(group, "num_keys", 0) or 0):
         return None
     kind = _name(group.interpolation)
@@ -84,8 +55,6 @@ def _quaternion_keys(data) -> dict | None:
 
 
 def _pose(transform) -> dict:
-    """An `NiQuatTransform`; a component written as -FLT_MAX is not stated
-    (`animation.INVALID`) and arrives as None."""
     t, r, s = transform.translation, transform.rotation, float(transform.scale)
     stated = lambda *v: all(abs(float(x)) < 3.4e38 for x in v)
     return {
@@ -103,8 +72,6 @@ def _comp(interp, handle, size: int, offset, half_range) -> list:
 
 
 def _interpolator(interp) -> dict | None:
-    """One interpolator as data. `kind` names what it is; `value` or `pose` is
-    what it holds when it has no keys."""
     if interp is None:
         return None
     kind = type(interp).__name__
@@ -161,10 +128,6 @@ def _controllers(block):
 
 
 def _node(node, parent: int, path: str) -> dict:
-    """One `NiAVObject`: its own transform in the file's units and what hangs on it.
-
-    `rotation` is the matrix's rows as the file stores them; the node's matrix is
-    their transpose times `scale`, as `graph.matrix_of` builds it."""
     r = node.rotation
     out = {
         "name": str(node.name), "type": type(node).__name__, "path": path, "parent": parent,
@@ -203,7 +166,6 @@ def _node(node, parent: int, path: str) -> dict:
 
 
 def tree(root) -> list:
-    """Every `NiAVObject` under `root`, depth first in child order, culled ones too."""
     out = []
     stack = [(root, -1, "")]
     while stack:
@@ -217,7 +179,6 @@ def tree(root) -> list:
 
 
 def describe(sequence, sequence_id: int) -> dict:
-    """One `NiControllerSequence`: timing, text keys and every controlled block."""
     text = getattr(sequence, "text_keys", None)
     return {
         "id": sequence_id, "name": str(sequence.name),
@@ -236,12 +197,6 @@ def describe(sequence, sequence_id: int) -> dict:
 
 
 def asset(streamable) -> dict:
-    """A `CStreamableAssetData` block: its tree and its sequences by KFM id.
-
-    The embedded KFM's animation `index` is the sequence's place in the block's
-    list and its event code the id the engine plays it by; a block without a
-    readable KFM takes the list's order as ids.
-    """
     sequences = [s for s in (getattr(streamable, "refs", ()) or ())
                  if s is not None and type(s).__name__ == "NiControllerSequence"]
     ids = list(range(len(sequences)))

@@ -1,68 +1,3 @@
-"""A whole region: what stands in it, who walks it, and what lights it.
-
-A region is a folder under `World/`, and what it holds is spread over three
-places. The ground and the built geometry are NIFs beside it; the props, the
-lights and the trees are binary XML beside those; the characters, the items
-and the triggers live with the episode, not with the region, and name their
-region in an attribute. **The attribute places them, not the folder**:
-Banditcamp's humans are in `Episodes/Episode_1_Extended/Characters/
-BanditCamp_characterfile.xml`, outside `Regions/Banditcamp`, and a reader that
-only looked there found 47 of the 99 characters and 169 of the 199 items. The
-engine loads that file because `Characters/gamestats_global_characters.xml`
-includes it, beside the region's own `Regions/<r>/Characters/
-gamestats_characters.xml`; every character and item file Banditcamp's reads
-touch is included by one of the two. Install-wide one file is in a folder and
-in no include list, `Regions/BrokenValley_2/Items/
-bv_mindread_2_cellar_itemfile.xml` -- measured 2026-09-16 -- so a reader of
-BrokenValley_2 should follow the includes instead of the folders.
-
-| what | file | what names its model |
-|---|---|---|
-| scenery | `World/<r>/<sub>/scenery.xml` | `rpgstats_sceneryprototypes.xml` |
-| characters | `Episodes/<e>/**/Characters/*.xml` | `rpgstats_characterprototypes_visual.xml` |
-| items | `Episodes/<e>/**/Items/*.xml` | `rpgstats_itemprototypes.xml` -> `..._itemvisualprototypes.xml` |
-| triggers | `Episodes/<e>/Triggers/*.xml` | nothing: a trigger is a volume |
-| lights | `World/<r>/<sub>/Lights/<time>/lights.xml` | nothing |
-| trees | `World/<r>/<sub>/trees.xml` | `forest-settings.xml`, and see below |
-| vegetation | `World/<r>/<sub>/Vegetation.nif` | itself |
-
-**Every placement is stored the same way**: an `NiPoint3` child for the
-position and an `NiMatrix3` child for the basis, in that order, and both in
-metres. The engine's own readers say so --
-`CRpgStats_V2_Scenery::LoadXML`, `CRpgStats_V2_Character::LoadXML`,
-`CRpgStats_V2_Item::LoadXML` and `CGameLogic_Tree::LoadXML` all take
-`children[0]` as the position and `children[1]` as the orientation. The
-binary stream stores children in reverse, and the shared reader undoes that
-once, for everything; see `divinity2.docs`.
-
-**A trigger is a prism or a point.** `Trigger_area` holds a `PolyArea` with
-`Top` and `Bottom` and a ring of `AreaPoint`s at the bottom height, so the
-volume is that polygon extruded upward. `Trigger_Point`, `Trigger_Orientation`
-and their named cousins hold a single position, with a basis when the thing
-has a facing. The `Type` number is not decoded here: the child element is its
-own label and needs no table.
-
-**A tree has no mesh.** `model="BoxWood"` names a `CTreeModel` in
-`forest-settings.xml`, whose `model` is a SpeedTree `.spt` -- a procedural
-definition, not geometry. The whole SpeedTree runtime is linked into the game
-(`CSpeedTreeRT::LoadTree`, `CTreeModel::SetupBranchGeometry`) and grows the
-tree at load. So a tree arrives as a marker with its name, its position and
-its size, and the size is exact:
-`CGameLogic_Tree::PreparePhysicsData` computes it as
-`rescaled.y * CTreeModel.size`, where `CGameLogic_Tree::UpdateInstanceData`
-sets `rescaled.y = (1 - v) + instance.y * v * 2` for `v = treesizevariation`.
-`instance.x` is the tree's rotation and `instance.z` its colour variation,
-both fed to the SpeedTree shader; neither is converted here.
-
-**Vegetation is scattered by the engine, not stored.** `Vegetation.nif` is the
-region's library of grass and undergrowth meshes, one `NiNode` per source
-file, and `vegetationtemplatedata.xml` names them again with their textures.
-Where each blade stands is generated at load from a seed and a per-cell mask
-(`Vegetation/VM_<x>_<y>.tga`, the names
-`CVegetationGridManager::GenerateVegetationGridEntryDescriptors` scans for).
-`divinity2.vegetation` generates the same field (`docs/vegetation.md`).
-"""
-
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -71,45 +6,28 @@ import numpy as np
 
 from . import docs
 
-#: Where the placement files live, relative to the install.
 WORLD = Path("World")
 
-#: The table that says which time of day each region is loaded at.
 WORLD_REGIONS = Path("Worldregions.xml")
 
-#: The scenery prototype table, beside the install root, and the element in
-#: it that names a model. The placement calls the thing `Scenery`; the
-#: prototype that describes it is a `sceneryitem`.
 SCENERY_PROTOTYPES = "rpgstats_sceneryprototypes.xml"
 SCENERY_ITEM = "sceneryitem"
 
-#: `Assets\...` in a prototype path *replaces* onto this folder, it does not
-#: nest under it.
 SCENERY_ROOT = Path("Win32") / "Scenery"
 ITEM_ROOT = Path("Win32") / "Items"
 CHARACTER_ROOT = Path("Win32") / "Characters" / "Templates"
 
-#: A sub-region's time settings: the `lightsetting` entries of its own file,
-#: in file order (`CGameLogic_SubRegion::LoadLightSettings`), each naming a
-#: folder under `Lights/`.
 LIGHT_SETTINGS = "lightsettings.xml"
 
-#: The one node that carries a trigger's polygon.
 AREA = "PolyArea"
 
-#: The water planes' style table, beside `lights.xml` in the same time folder.
 WATER = "waterplanedata_v2.xml"
 
-#: `WaterPlaneData`'s numbers, typed. Every other attribute the entry has is
-#: carried too, as the string the file holds.
 WATER_FIELDS = ("shininess", "wavestrength", "wavesize", "wavespeed",
                 "fresneloffset", "lodstrength", "lodstepsize", "sunstrength",
                 "texscale", "fogmodifier", "alphamodifier", "vertexwavestrength",
                 "foamstrength")
 
-#: What a water plane holds when no entry of its own name was loaded:
-#: `CWaterPlaneData::CWaterPlaneData`, floats read out of the exe. The two colours
-#: are `WaterColor` and `FogColor`, in the order an entry lists its `NiColor`s.
 WATER_DEFAULTS = {
     "type": "0", "fogmodifier": 5.0, "alphamodifier": 15.0, "wavestrength": 0.1,
     "wavesize": 0.5, "shininess": 512.0, "sunstrength": 2.0, "texscale": 1.0,
@@ -121,18 +39,16 @@ WATER_DEFAULTS = {
 
 @dataclass
 class Placed:
-    """One thing standing in a region."""
-
-    kind: str                       #: scenery, character, item, trigger, light, tree
-    uuid: str                       #: the name the file gives it
-    name: str                       #: what to call it in the scene
-    position: tuple                 #: metres, region space
-    basis: np.ndarray | None = None  #: 3x3 rotation, rows as the engine reads them
+    kind: str
+    uuid: str
+    name: str
+    position: tuple
+    basis: np.ndarray | None = None
     scale: float = 1.0
-    model: Path | None = None       #: the file holding its mesh, when it has one
-    fields: dict = field(default_factory=dict)  #: everything else the file said
-    polygon: list = field(default_factory=list)  #: a trigger's ring, in metres
-    height: tuple | None = None     #: a trigger prism's (bottom, top)
+    model: Path | None = None
+    fields: dict = field(default_factory=dict)
+    polygon: list = field(default_factory=list)
+    height: tuple | None = None
 
 
 @dataclass
@@ -140,37 +56,20 @@ class Region:
     name: str
     sub: str
     placed: list = field(default_factory=list)
-    statics: Path | None = None      #: `StaticMeshes.nif`, the built geometry
-    vegetation: Path | None = None   #: `Vegetation.nif`, the library
-    missing: dict = field(default_factory=dict)  #: kind -> how many found no model
-    unread: dict = field(default_factory=dict)   #: path -> why it would not parse
+    statics: Path | None = None
+    vegetation: Path | None = None
+    missing: dict = field(default_factory=dict)
+    unread: dict = field(default_factory=dict)
 
     def of(self, kind: str) -> list:
         return [p for p in self.placed if p.kind == kind]
 
 
-# ---------------------------------------------------------------- the basics
-
 def _attrs(node) -> dict:
-    """Everything the file said about this node, by name.
-
-    The whole record, not a chosen subset: a field that is useless to the
-    add-on is the one the port needs later, and the file already holds it. A
-    name divinity2-lib has not recovered is written down as its hash
-    rather than dropped, so a gap shows up in the table instead of vanishing.
-    """
     return node.named()
 
 
 def record(node, skip=(), prefix: str = "") -> dict:
-    """Everything under a node, not only its own attributes.
-
-    A descendant's attribute is written `child.attr`, and a child name that
-    repeats takes its place among its namesakes, `NiColor[1].r`. `skip` names
-    children already carried another way -- the position and the basis, which
-    arrive as numbers. A light keeps its colour two levels down and a scenery
-    prop its type info one level down; `_attrs` alone dropped both.
-    """
     out = {prefix + k: v for k, v in _attrs(node).items()}
     if node.text:
         out[prefix + "#text"] = node.text
@@ -195,7 +94,6 @@ def _basis(node) -> np.ndarray:
 
 
 def placement(node):
-    """(position, basis, the children they came from) of a placement."""
     position, basis, used = (0.0, 0.0, 0.0), None, []
     for child in node.children:
         if child.is_a("NiPoint3") and not any(u.is_a("NiPoint3") for u in used):
@@ -212,17 +110,11 @@ def folder(root, region: str, sub: str) -> Path:
     return here / sub if sub == "Main" else here / "Subregions" / sub
 
 
-#: What could not be read, and why: `divinity2.docs.UNREAD`.
 _read = docs.read
 
 
 @lru_cache(maxsize=4)
 def files_under(root: Path, under: str, suffix: str) -> dict:
-    """Every file of one kind, keyed by its lower-cased relative path.
-
-    Larian's own tables disagree with the disk about case, and a Linux
-    filesystem does not forgive that.
-    """
     base = Path(root) / under
     if not base.is_dir():
         return {}
@@ -232,11 +124,8 @@ def files_under(root: Path, under: str, suffix: str) -> dict:
     }
 
 
-# ------------------------------------------------------------- model lookups
-
 @lru_cache(maxsize=4)
 def _scenery_models(root: Path) -> dict:
-    """Scenery prototype UUID -> the `.item` on disk."""
     doc = _read(Path(root) / SCENERY_PROTOTYPES)
     if doc is None:
         return {}
@@ -257,13 +146,6 @@ def _scenery_models(root: Path) -> dict:
 
 @lru_cache(maxsize=4)
 def character_models(root: Path) -> dict:
-    """Visual prototype UUID -> the `.cat` on disk.
-
-    A `Visual` gives `PrototypeName` -- the family, `SkeletonHuman` -- and
-    `TemplateName`, which is the template inside it. The template is also the
-    name of a file under `Characters/Templates`, for 300 of the game's 302
-    visuals; the two that are not are unused Froblin variants.
-    """
     root = Path(root)
     files = files_under(root, str(CHARACTER_ROOT), ".cat")
     out = {}
@@ -282,12 +164,6 @@ def character_models(root: Path) -> dict:
 
 @lru_cache(maxsize=4)
 def _item_models(root: Path) -> dict:
-    """Item prototype UUID -> the `.item` on disk.
-
-    Two hops: an `item` names a `VisualUUID`, and that `itemvisual` names a
-    `Folder` and a `NifFileName` under `Items`. 1,141 of 1,177 resolve; the
-    rest are cutscene props the game does not ship.
-    """
     root = Path(root)
     files = files_under(root, str(ITEM_ROOT), ".item")
     visuals = {}
@@ -313,8 +189,6 @@ def _item_models(root: Path) -> dict:
     return out
 
 
-# ------------------------------------------------------------- the placements
-
 def _scenery(root: Path, region: str, sub: str) -> list:
     doc = _read(folder(root, region, sub) / "scenery.xml")
     if doc is None:
@@ -339,20 +213,12 @@ def _scenery(root: Path, region: str, sub: str) -> list:
 
 def _from_episodes(root: Path, region: str, sub: str, where: str, element: str,
                    kind: str, models: dict, model_key: str) -> list:
-    """Characters and items: same shape, different table.
-
-    Every `<where>` folder of the episode, filtered on `RegionName` and
-    `SubRegionName` -- the rule `_triggers` already used. A UUID that two files
-    both place is placed once, from the first file in path order.
-    """
     out, taken = [], set()
     for table in _episode_files(Path(root), where):
         doc = _read(table)
         if doc is None:
             continue
         for node in doc.find_all(element):
-            # An `Item` without a position is not placed in the world -- it is
-            # what something else is carrying, and the same files hold both.
             if node.get("RegionName") != region or node.get("SubRegionName") != sub:
                 continue
             if not any(c.is_a("NiPoint3") for c in node.children):
@@ -375,7 +241,6 @@ def _from_episodes(root: Path, region: str, sub: str, where: str, element: str,
 
 
 def _episode_files(root: Path, where: str) -> list:
-    """Every document in a `<where>` folder anywhere under an episode."""
     return docs.glob(root, f"episodes/*/{where}/*.xml")
 
 
@@ -384,14 +249,6 @@ def _triggers(root: Path, region: str, sub: str) -> list:
 
 
 def teleport_targets(root) -> dict:
-    """Every trigger a teleport can land on, per episode, across the whole game.
-
-    `CRpgStats_V2_Character::TeleportToTrigger` accepts only a `Point` or an
-    `Orientation` trigger, and takes the region and sub-region from the trigger
-    itself -- which may lie in a sub-region that is not loaded. So the runtime
-    needs them all, not only the region's own: `{episode: {uuid: {region, sub,
-    shape, position, basis}}}`, episode lower-cased.
-    """
     out = {}
     for episode, (region, sub), placed in _all_triggers(root):
         if placed.fields["shape"] in ("Point", "Orientation"):
@@ -403,8 +260,6 @@ def teleport_targets(root) -> dict:
 
 
 def _all_triggers(root: Path) -> list:
-    """`(episode, (region, sub), Placed)` for every trigger every episode places.
-    Every one of the game's 6,026 `Trigger_base` names its `SubRegion` (measured)."""
     out = []
     for table in docs.glob(root, "episodes/*/triggers/*.xml"):
         episode = Path(table).relative_to(root).parts[1].lower()
@@ -453,28 +308,15 @@ def _all_triggers(root: Path) -> list:
 
 
 def _label(node) -> str:
-    """A trigger's shape element, by its own name without the `Trigger_`.
-
-    A list of six known shapes turned 743 of the game's 6,769 into "other"
-    (`EffectArea`, `SoundArea`, ...)."""
     return node.name[len("Trigger_"):] if node.name.startswith("Trigger_") else node.name
 
 
 def time_settings(root, region: str, sub: str) -> list:
-    """The time settings a sub-region lists, in its own order."""
     doc = _read(folder(root, region, sub) / LIGHT_SETTINGS)
     return [n.get("name") for n in doc.find_all("lightsetting")] if doc else []
 
 
 def time_setting(root, region: str, sub: str, wanted: str = "") -> str:
-    """The time setting the engine loads a sub-region at.
-
-    `CGameLogic_SubRegion::Load`: the one asked for if the sub-region lists it
-    (`HasTimeSetting`), else the first one it lists, else none at all -- the
-    sub-region then has no current time setting. What is asked for is the
-    region's `timesetting` (`time_of`) unless `wanted` names one. Banditcamp
-    asks for `Dawn`; `Main` lists it, the cave lists only `Day`.
-    """
     listed = time_settings(root, region, sub)
     wanted = wanted or time_of(root, region)
     if wanted in listed:
@@ -483,8 +325,6 @@ def time_setting(root, region: str, sub: str, wanted: str = "") -> str:
 
 
 def _time_at(model_path, time: str = "") -> str:
-    """`time_setting` for the sub-region a model file lies in:
-    `<root>/World/<region>/Main/...` or `<root>/World/<region>/Subregions/<sub>/...`."""
     parts = Path(model_path).parent.parts
     if WORLD.name not in parts:
         return ""
@@ -503,9 +343,6 @@ def _lights(root: Path, region: str, sub: str, time: str = "") -> list:
     if doc is None:
         return []
     out, inside = [], []
-    # `CSpotLight::LoadXML` takes exactly two children: an `NiTransform` and a
-    # whole `point_light`, which `CPointLight::LoadXML` reads as its own. That
-    # inner one is the spot, not a second light.
     for node in doc.find_all("spot_light"):
         out.append(_light(node, "spot"))
         inside += list(node.find_all("point_light"))
@@ -518,15 +355,6 @@ def _lights(root: Path, region: str, sub: str, time: str = "") -> list:
 
 
 def _light(node, shape: str) -> Placed:
-    """One light, with the colour and dimmer its `GBLight` carries.
-
-    A point light's position is the `translate` under its `GBLight`; a
-    directional light has none, only two angles, and a spot light has an
-    `NiTransform`. Both of the latter shine along `direction`, the **first
-    column** of their basis: `NiDirectionalLight::UpdateWorldData` and
-    `NiSpotLight::UpdateWorldData` copy `m_kWorldDir` out of the world
-    rotation's column 0. For the sun that basis is `sun_basis`.
-    """
     gb = next(node.find_all("GBLight"), None)
     position = (0.0, 0.0, 0.0)
     colour = (1.0, 1.0, 1.0)
@@ -553,8 +381,6 @@ def _light(node, shape: str) -> Placed:
         derived["radius"] = float(point.get("m_fMaxAttenuationRadius", 1.0) or 1.0)
         derived["inner"] = float(point.get("m_fMinAttenuationRadius", 0.0) or 0.0)
     if shape == "spot":
-        # The transform is the spot's own; its position agrees with the inner
-        # light's `translate` in all 71 spot lights the install ships.
         transform = next(node.find_all("NiTransform"), None)
         if transform is not None:
             position, basis, _ = placement(transform)
@@ -568,20 +394,6 @@ def _light(node, shape: str) -> Placed:
 
 
 def water_styles(model_path, time: str = "") -> dict:
-    """The water plane styles a sub-region loads, keyed by the plane they are for.
-
-    `waterplanedata_v2.xml` is a style table, **not** a placement. The planes
-    themselves are geometry inside `StaticMeshes.nif`, marked
-    `UserPropBuffer=WaterPlane`, which `CRegionVisual::ParseRegionNode` turns
-    into `CWaterPlane`s. The engine reads the table from the folder of the time
-    setting it loads at (`CRegionVisual::ApplyCurrentTimeSettings` ->
-    `CWaterRenderer::UpdateTimeSettings`), merges it by name, and a later entry
-    of the same name overwrites an earlier one (`CWaterPlaneDataMan::LoadXML`).
-
-    Returns `{}` when that folder ships no such file: the engine then keeps
-    what it had, which on a region's first load is `WATER_DEFAULTS`. Use
-    `water_style` for what one plane ends up with.
-    """
     if model_path is None:
         return {}
     found = Path(model_path).parent / "Lights" / _time_at(model_path, time) / WATER
@@ -610,24 +422,10 @@ def water_styles(model_path, time: str = "") -> dict:
 
 
 def water_style(styles: dict, plane: str) -> dict:
-    """One plane's style: its own entry, matched by exact name
-    (`CWaterPlaneDataMan::AddWaterPlane`, `NiStringEqualsFunctor`), or the
-    constructor's defaults. Banditcamp's `Pond_BC_01_A` has no entry of its
-    own at any hour, so it is drawn with the defaults."""
     return {**WATER_DEFAULTS, **styles.get(plane, {})}
 
 
 def sun_basis(angle_y: float, angle_z: float) -> np.ndarray:
-    """The sun's rotation, entry for entry as the engine builds it.
-
-    `CDirLight::UpdateVisual` copies `MakeZRotation(angle_z) * MakeYRotation(angle_y)`
-    into the light. Gamebryo's `NiMatrix3::MakeZRotation` writes
-    `[[c, s, 0], [-s, c, 0], [0, 0, 1]]` and `MakeYRotation`
-    `[[c, 0, -s], [0, 1, 0], [s, 0, c]]` -- the transposes of the textbook
-    matrices -- so the product is too, and its column 0, the way the light
-    travels, is `(cy*cz, -cy*sz, sy)`. The textbook product used before gave
-    the same height with x mirrored.
-    """
     cy, sy = np.cos(angle_y), np.sin(angle_y)
     cz, sz = np.cos(angle_z), np.sin(angle_z)
     return np.array([[cz, sz, 0], [-sz, cz, 0], [0, 0, 1]]) @ \
@@ -636,7 +434,6 @@ def sun_basis(angle_y: float, angle_z: float) -> np.ndarray:
 
 @lru_cache(maxsize=4)
 def _tree_models(root: Path) -> dict:
-    """`CTreeModel` name -> its size, variation and `.spt`, from `forest-settings.xml`."""
     doc = _read(Path(root) / "forest-settings.xml")
     if doc is None:
         return {}
@@ -681,11 +478,7 @@ def _trees(root: Path, region: str, sub: str) -> list:
     return out
 
 
-# ------------------------------------------------------------------ the whole
-
 def _declared(root) -> dict:
-    """`CGameLogic_World::LoadXML`: every `region` of `Worldregions.xml`, each
-    with an implicit `Main` and its `subregion` children, in file order."""
     doc = _read(Path(root) / WORLD_REGIONS)
     return {} if doc is None else {
         node.get("name"): ["Main"] + [c.get("name") for c in node.children if c.is_a("subregion")]
@@ -693,22 +486,14 @@ def _declared(root) -> dict:
 
 
 def regions(root) -> list:
-    """Every region the engine knows. Two of them (`DialogDesigner`,
-    `FeatureScene`) ship no folder; reading one finds nothing, visibly."""
     return sorted(_declared(root))
 
 
 def subregions(root, region: str) -> list:
-    """`Main` first, then the region's sub-regions as `Worldregions.xml` lists them."""
     return _declared(root).get(region, [])
 
 
 def time_of(root, region: str) -> str:
-    """The time setting `Worldregions.xml` asks for a region, as written.
-
-    Banditcamp asks for `Dawn`. Whether a sub-region has it is
-    `time_setting`'s question, not this one's.
-    """
     doc = _read(Path(root) / WORLD_REGIONS)
     for node in (doc.find_all("region") if doc else ()):
         if node.get("name") == region:
@@ -717,10 +502,6 @@ def time_of(root, region: str) -> str:
 
 
 def read(root, region: str, sub: str = "Main", time: str = "") -> Region:
-    """Read one region into plain data. Knows nothing about Blender.
-
-    `time` empty means the one `Worldregions.xml` gives the region.
-    """
     root = Path(root)
     time = time_setting(root, region, sub, time)
     here = folder(root, region, sub)

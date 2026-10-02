@@ -1,31 +1,10 @@
-"""Clips as Blender actions.
-
-A pose in Blender is expressed against the bone's rest position, not against
-the parent. The clip gives the bone's local transform relative to its parent,
-so each sample has to be taken back into rest space:
-
-    matrix_basis = rest_local⁻¹ @ local_from_clip
-
-Skipping that step produces an armature that moves -- so every count agrees --
-but whose bones sit wherever the rest pose happened to differ, which reads as
-a broken rig rather than a wrong conversion.
-"""
-
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 from ..divinity2 import animation as dv2_animation
 
+# NiMultiTargetTransformController::Update @63e070 decomp
 def _sample(track, at: float, factor: float, rest: Matrix):
-    """Location, rotation and scale of one bone at one point in the clip
-    (`divinity2.animation.sample`). A stated rotation of no length and a stated
-    scale that is not positive read as the identity; an animated one as given.
-
-    A component the track does not state keeps the bone's rest value `rest`:
-    the engine writes no `INVALID_TRANSLATE` or `INVALID_ROTATE` component
-    (`NiMultiTargetTransformController::Update` @63e070). Zero instead put 12 of
-    F_Rhode's `FACE_Default` nodes, `FACE` and the nose, brows and cheeks among
-    them, on their parent's origin and tore the face."""
     t, r, s = dv2_animation.sample(track, at)
     location = Vector(t) * factor if t is not None else rest.to_translation()
     rotation = rest.to_quaternion() if r is None else Quaternion((1.0, 0.0, 0.0, 0.0))
@@ -38,14 +17,12 @@ def _sample(track, at: float, factor: float, rest: Matrix):
 
 
 def _rest_local(bone) -> Matrix:
-    """A bone's rest transform relative to its parent."""
     if bone.parent is None:
         return bone.matrix_local.copy()
     return bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
 
 
 def build_action(armature_obj, clip, factor: float, fps: int | None = None):
-    """One clip as one Blender action. Returns the action, or None."""
     tracks = [t for t in dv2_animation.tracks(clip.sequence)]
     if not tracks:
         return None
@@ -90,24 +67,17 @@ def build_action(armature_obj, clip, factor: float, fps: int | None = None):
         return None
 
     _mark(action, clip, fps)
-    action.frame_range  # realise the range Blender caches
+    action.frame_range
     return action
 
 
 def _mark(action, clip, fps: int) -> None:
-    """The clip's text keys as pose markers on the action.
-
-    A marker carries the name and the frame, which is what another engine
-    needs to hang a footstep or an effect on; the alternative is finding the
-    frame again by eye.
-    """
     for event in dv2_animation.events(clip.sequence):
         marker = action.pose_markers.new(event.text)
         marker.frame = 1 + int(round((event.time - clip.start) * fps))
 
 
 def build_actions(armature_obj, clips, factor: float) -> list:
-    """Every clip of a character, as actions on its armature."""
     built = []
     for clip in clips:
         action = build_action(armature_obj, clip, factor)
