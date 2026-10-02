@@ -1,19 +1,19 @@
 """The shared rig.
 
 Half the characters carry no skeleton and no clips of their own. They are not
-broken: they share a rig with every other character of their family. 105 human
+broken: they share a rig with every other character of their prototype. 105 human
 characters run on one `HumanMale` skeleton, and a Froblin has five animation
 sets to pick from.
 
-A character's family is the first segment of its mesh entries' paths --
-`HumanMale\\Meshes\\M_Torso_A.nif` is family `HumanMale` -- and the family's
-files live in `Win32/Characters/<family>/`:
+A character's prototype (`CModelPrototype`) is the first segment of its mesh entries' paths --
+`HumanMale\\Meshes\\M_Torso_A.nif` is prototype `HumanMale` -- and the prototype's
+files live in `Win32/Characters/<prototype>/`:
 
-    Skeleton.nif          the skeleton every character of the family uses
+    Skeleton.nif          the skeleton every character of the prototype uses
     <set>.kfm             one animation set: which clips, and how they join
     <set>.kf              the clips themselves
 
-`Attachables` is not a family. It is where the weapons live.
+`Attachables` is not a prototype. It is where the weapons live.
 """
 
 from pathlib import Path
@@ -24,38 +24,39 @@ from .nif import read_nif
 CHARACTERS = Path("Win32") / "Characters"
 SKELETON_FILE = "Skeleton.nif"
 
-#: A path segment that names a place, not a family.
-NOT_A_FAMILY = {"attachables"}
+#: A path segment that names a place, not a `CModelPrototype`.
+NOT_A_PROTOTYPE = {"attachables"}
 
 
-def families(character) -> list[str]:
-    """The families a character's meshes come from, most likely first."""
+def prototypes(character) -> list[str]:
+    """The `CModelPrototype` folders a character's meshes come from, most likely first."""
     seen = []
     for mesh in character.meshes:
         head = str(mesh.name).replace("\\", "/").split("/")[0]
-        if head.lower() in NOT_A_FAMILY or head in seen:
+        if head.lower() in NOT_A_PROTOTYPE or head in seen:
             continue
         seen.append(head)
     return seen
 
 
-def family_of(character, game_root) -> str | None:
-    """The family that actually owns a skeleton on disk."""
-    for name in families(character):
+def prototype_of(character, game_root) -> str | None:
+    """The `CModelPrototype` that actually owns a skeleton on disk (`Win32/Characters/<prototype>/Skeleton.nif`,
+    pooled per prototype by `MdlMan::CWrapperMan::GetWrapper` @c864d0)."""
+    for name in prototypes(character):
         if (Path(game_root) / CHARACTERS / name / SKELETON_FILE).is_file():
             return name
     return None
 
 
 def skeleton_path(character, game_root) -> Path | None:
-    name = family_of(character, game_root)
+    name = prototype_of(character, game_root)
     if name is None:
         return None
     return Path(game_root) / CHARACTERS / name / SKELETON_FILE
 
 
 def shared_skeleton(character, game_root):
-    """The family's skeleton as a NiNode, or None when it owns one already."""
+    """The prototype's skeleton as a NiNode, or None when it owns one already."""
     if character.skeleton is not None:
         return character.skeleton
     path = skeleton_path(character, game_root)
@@ -92,7 +93,7 @@ def engine_clip_files(template: str, game_root, actions=NPC_ACTION_BANKS,
     (`CProperty::CheckValues` @0x471a80), and a key the descriptor lacks
     matches anything; when one action bank finds nothing, `Default` is added to
     the query's `SubClass` and it is asked again, so a sub-class KFM hides the
-    family's default one.
+    prototype's default one.
 
     `weapons` defaults to every weapon set, which is every set a character of
     this template could reach; `states` is the posture bank plus `Default`.
@@ -155,9 +156,9 @@ def clip_files(character, game_root) -> list[Path]:
     """The `.kf` files the character's own KFM names, resolved on disk.
 
     The KFM writes the names the way the game sees them -- `.\\Froblin_Base.kf`,
-    relative to the family's folder -- so only the last segment is used.
+    relative to the prototype's folder -- so only the last segment is used.
     """
-    name = family_of(character, game_root)
+    name = prototype_of(character, game_root)
     if name is None:
         return []
     directory = Path(game_root) / CHARACTERS / name
