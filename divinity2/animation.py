@@ -140,6 +140,23 @@ def tracks(sequence) -> list[Track]:
     return out
 
 
+CHANNELS = (("translation", 3), ("rotation", 4), ("scale", 1))
+
+
+# NiBSplineData::GetCompactedValueDegree3 @6535d0 decomp
+def compact(interpolator) -> dict:
+    basis, data = interpolator.basis_data, interpolator.spline_data
+    out = {"start": float(interpolator.start_time), "stop": float(interpolator.stop_time),
+           "points": int(basis.num_control_points) if basis else 0}
+    for name, size in CHANNELS:
+        handle = getattr(interpolator, f"{name}_handle")
+        held = handle != NO_HANDLE and basis and data
+        out[name] = {"offset": float(getattr(interpolator, f"{name}_offset")),
+                     "half_range": float(getattr(interpolator, f"{name}_half_range")),
+                     "values": [list(p) for p in data.get_short_data(handle, out["points"], size)]} if held else None
+    return out
+
+
 def _kind(value) -> str:
     return str(getattr(value, "name", value))
 
