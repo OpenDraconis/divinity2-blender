@@ -10,6 +10,8 @@ B-splines are cubic (degree 3); control points are not on the curve, each span b
 
 Knots are open uniform and clamped: 0,0,0,0,1,...,n-4,n-3,n-3,n-3,n-3 over n points; the curve starts on the first point and ends on the last; the first and last spans weigh with 1 and 1/2, inner spans with 1/2 and 1/3 — NiBSplineBasis<float,3>::Compute @652dc0 decomp
 
+A compacted channel is its offset, its half range and, at its handle, control points × channel size 16-bit values (translation 3, rotation 4, scale 1); each span decompresses its four control points with that offset and half range before blending them — NiBSplineData::GetCompactedValueDegree3 @6535d0 decomp
+
 A component the file does not carry is written as -FLT_MAX; `trs_valid` is an empty array at NIF 20.3.0.9, so the sentinel is the only indicator — trs_valid nif
 
 A component a track does not state keeps the bone's rest value; the engine writes no INVALID_TRANSLATE or INVALID_ROTATE component — NiMultiTargetTransformController::Update @63e070 decomp
