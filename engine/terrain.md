@@ -12,7 +12,7 @@ Terrain shapes carry no NiTexturingProperty, only NiMaterialProperty; the recipe
 
 `TilingParams[i] = (float)m_iTextureTiling`, an integer; layers are passed pass by pass, within a pass by channel (heap row order) — CTerrainPatchLOD::AttachExtraData @754670 decomp
 
-`CTerrainSplatRenderer::LoadXML` reads `splatdistance` and `splatblenddistance` from Terrain.xml with `atoi`; the constructor gives 100 and 25 where absent; `UpdateSplatDistance` forces the radius to 2000 when `CGraphicSettings::m_eRenderMethod` is not 0 — CTerrainSplatRenderer::LoadXML @6ed7f0, CTerrainSplatRenderer::UpdateSplatDistance @6ec9d0 decomp
+`CTerrainSplatRenderer::LoadXML` reads `splatdistance` and `splatblenddistance` from Terrain.xml with `atoi`; the constructor gives 100 and 25 where absent; `UpdateSplatDistance` forces the radius to 2000 when StaticAssetHighQuality is on; `CGraphicSettings::LoadXML` stores StaticAssetHighQuality in the byte the PDB type names `m_eRenderMethod` — CTerrainSplatRenderer::LoadXML @6ed7f0, CTerrainSplatRenderer::UpdateSplatDistance @6ec9d0, CGraphicSettings::LoadXML @76a300 decomp
 
 The game reads RenderMethod and StaticAssetHighQuality from `graphicoptions.xml` in the player's profile; with no file or attribute they are RenderMethod 1 (light pre-pass) and StaticAssetHighQuality 0. Presets 0, 1 and 4 turn StaticAssetHighQuality off, 2 and 3 on, 5 (user-defined) keeps the file's values. Only the file sets the render method: `SetRenderMethod` (@6a2b70 dc) has no caller — CGraphicSettings::GetSaveFile @769010, CGraphicSettings::LoadXML @76a300, CGraphicSettings::CGraphicSettings @76a700 decomp, CGraphicSettings::LoadXML @6a4f70 dc, CGraphicSettings::CGraphicSettings @6a2d80 dc, CGraphicSettings::SetQualityIndex @6a3a50 dc
 
