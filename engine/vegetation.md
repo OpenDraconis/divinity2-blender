@@ -12,6 +12,8 @@ A cell is `CVegetationGridManager::m_usGridEntrySize = 0x20` = 32 m on a side, s
 
 `ProcessVegetationMap` walks a cell u,v = 0, 1/32, ..., 31/32 (32x32 samples, one per mask pixel, filling `m_vVeggyInstanceArray[1024]`) and asks `CTemplate::CreateInstance(u, v)` per sample; the height query is `GetHeightAt(origin.x + 32*u, origin.y + 32*v)` — CVegetationPatch::ProcessVegetationMap @72b6d0, VeggyLib::CTemplate::CreateInstance @107cd20 decomp
 
+A cell's plants are numbered in walk order, counting only the samples `CreateInstance` grows a plant at: `m_vVeggyInstanceArray[m_usAmountOfInstances++]` — CVegetationPatch::ProcessVegetationMap @72b6d0 decomp
+
 The patch node sits at `index*width`; the origin `ProcessVegetationMap` walks from arrives through the streaming letter — CVegetationGridEntry::UpdateWorldData @72d910 decomp
 
 ## Mask

@@ -306,6 +306,8 @@ class Instance:
     size: float
     rotation: float
     colour: float
+    cell: tuple = (0, 0)
+    index: int = 0
 
 
 def _fields(template: Template) -> dict:
@@ -344,6 +346,7 @@ def scatter(recipe: Recipe, cells=None) -> list:
             continue
         ground = heights(picture)
         which = slot(picture[:, :, 0])
+        made = 0
         for row in range(STEPS):
             for column in range(STEPS):
                 if picture[row, column, 0] == 0:
@@ -366,7 +369,9 @@ def scatter(recipe: Recipe, cells=None) -> list:
                     rotation=float(f["turn"][row, column]),
                     colour=float(0.5 + plant.colour_scale
                                  * float(f["tint"][row, column]))
-                    if plant.flags.get("bColorVariation") else 0.5))
+                    if plant.flags.get("bColorVariation") else 0.5,
+                    cell=(cx, cy), index=made))
+                made += 1
     return out
 
 
