@@ -49,6 +49,14 @@ Directional and spot lights shine along column 0 of their basis: `NiDirectionalL
 
 Sun rotation: `CDirLight::UpdateVisual` copies MakeZRotation(angle_z) * MakeYRotation(angle_y). `NiMatrix3::MakeZRotation` writes [[c,s,0],[-s,c,0],[0,0,1]] and `MakeYRotation` [[c,0,-s],[0,1,0],[s,0,c]] (transposes of the textbook matrices); column 0, the light direction, is (cy*cz, -cy*sz, sy) — CDirLight::UpdateVisual @10ae6a0 decomp, NiMatrix3::MakeZRotation @52bee0, NiMatrix3::MakeYRotation @52be90 decomp
 
+## Rooms
+
+A `NiRoomGroup` in `StaticMeshes.nif` lists its rooms in the file's order; each `NiRoom` carries wall planes (normal, constant) in its model space, its in and out `NiPortal` lists and its fixtures — NiRoom::LoadBinary @6674b0, NiRoomGroup::LinkObject @668d70 decomp
+
+A wall's world plane is the normal rotated by the room's world rotation and the constant `scale * constant + normal . translation`; a point is inside a room when `normal . point - constant >= 0` for every wall — NiRoom::UpdateWorldData @665b20, NiRoom::ContainsPoint @664d00 decomp
+
+A portal's vertices are in its own model space, transformed by its world transform; its adjoiner is the node seen through it — NiPortal::UpdateWorldData @66a670, NiPortal::OnVisible @66a5f0 decomp
+
 ## Time settings
 
 A sub-region's `lightsetting` entries are read in file order (`CGameLogic_SubRegion::LoadLightSettings`), each naming a folder under `Lights/`. `CGameLogic_SubRegion::Load` takes the asked one if listed (`HasTimeSetting`), else the first listed, else none; the asked one is the region's `timesetting` unless a time is wanted — CGameLogic_SubRegion::Load @898b70, CGameLogic_SubRegion::LoadLightSettings @898860 decomp
