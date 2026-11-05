@@ -53,7 +53,7 @@ def _matrix(placed) -> Matrix:
     return basis @ Matrix.Scale(placed.scale, 4)
 
 
-STANDARD_DATA_KINDS = ("terrain", "scenery")
+STANDARD_DATA_KINDS = ("terrain", "scenery", "effectproxy")
 
 
 def _import_into(path, game_root, cache, into, **options) -> list:

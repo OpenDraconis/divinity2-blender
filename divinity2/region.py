@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import docs
+from . import docs, effect_proxies
 
 WORLD = Path("World")
 
@@ -501,6 +501,25 @@ def time_of(root, region: str) -> str:
     return ""
 
 
+def _effect_proxies(root, statics) -> list:
+    if statics is None or b"EffectFile" not in statics.read_bytes():
+        return []
+    items = files_under(Path(root), effect_proxies.EFFECTS, ".item")
+    out = []
+    for found in effect_proxies.read(statics):
+        key = found["item"][len(effect_proxies.EFFECTS) + 1:-len(".item")].lower()
+        out.append(Placed(
+            kind="effectproxy",
+            uuid=found["name"],
+            name=found["name"],
+            position=tuple(found["position"]),
+            basis=np.array(found["basis"], dtype=float),
+            model=items.get(key),
+            fields={"item": found["item"], "culling_distance": found["culling_distance"]},
+        ))
+    return out
+
+
 def read(root, region: str, sub: str = "Main", time: str = "") -> Region:
     root = Path(root)
     time = time_setting(root, region, sub, time)
@@ -519,6 +538,7 @@ def read(root, region: str, sub: str = "Main", time: str = "") -> Region:
 
     statics = here / "StaticMeshes.nif"
     out.statics = statics if statics.is_file() else None
+    out.placed += _effect_proxies(root, out.statics)
     plants = here / "Vegetation.nif"
     out.vegetation = plants if plants.is_file() else None
 
