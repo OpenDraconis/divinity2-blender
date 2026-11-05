@@ -19,7 +19,7 @@ A tree's instance data is filled from `rand()/2^31`, so its three components are
 `CRegionVisual::ParseRegionNode` walks `StaticMeshes.nif` and decides per node — CRegionVisual::ParseRegionNode @6a3790 decomp:
 
 - `CDummyGeometry` (RTTI): nothing, the function returns.
-- `effectproxy = yes`: a particle system from `Win32\Effects\<EffectFile>` at the node's world transform with `CullingDistance`; the box is not drawn.
+- `effectproxy = yes`: a scenery asset from `Win32\Effects\<EffectFile>` (extension `.item`) at the node's world transform with `CullingDistance` (default 150.0); the box is not drawn — CRegionVisual::ParseRegionNode @6a3790, CRegionVisual::LoadRegionAssets @6a34c0 decomp; `divinity2/effect_proxies.py` reads them and `region.read` returns them as `effectproxy` rows.
 - `glowproxy`: a CGlowEffect.
 - a name containing `PhysicsPROXY_`: a collision hull.
 - `IsCubeMapPosition`, `CubemapPosition`: a cubemap probe.
