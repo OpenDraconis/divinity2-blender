@@ -25,6 +25,7 @@ class Alpha:
     testing: bool = False
     function: str = "ALWAYS"
     threshold: int = 0
+    no_sort: bool = False
 
     @property
     def additive(self) -> bool:
@@ -44,7 +45,15 @@ def alpha(block) -> Alpha:
         testing=bool((flags >> 9) & 1),
         function=_name(FUNCTIONS, (flags >> 10) & 0x7, "ALWAYS"),
         threshold=int(block.threshold),
+        no_sort=bool((flags >> 13) & 1),
     )
+
+
+def z_buffer(block) -> dict | None:
+    if block is None:
+        return None
+    return {"test": bool(block.flags.z_buffer_test), "write": bool(block.flags.z_buffer_write),
+            "function": str(block.flags.test_func.name)}
 
 
 DEFAULT_VERTEX_COLOUR_FLAGS = 8
@@ -246,6 +255,7 @@ def describe(properties: dict, shape, data, pixel_format=lambda name: None,
         "material": colours,
         "specular": specular,
         "alpha": dict(decoded.__dict__),
+        "z_buffer": z_buffer(properties.get("NiZBufferProperty")),
         "two_sided": two_sided(properties.get("NiStencilProperty")),
         "vertex_colour": source,
         "lighting_mode": lighting_mode(properties.get("NiVertexColorProperty")),
