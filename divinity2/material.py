@@ -64,6 +64,13 @@ def lighting_mode(block) -> int:
     return int(block.flags.lighting_mode)
 
 
+def z_buffer(block) -> dict | None:
+    if block is None:
+        return None
+    return {"flags": int(block.flags), "test": bool(block.flags.z_buffer_test),
+            "write": bool(block.flags.z_buffer_write), "function": str(block.flags.test_func.name)}
+
+
 def two_sided(block) -> bool:
     return block is not None and int(block.draw_mode) == DRAW_BOTH
 
@@ -246,6 +253,7 @@ def describe(properties: dict, shape, data, pixel_format=lambda name: None,
         "material": colours,
         "specular": specular,
         "alpha": dict(decoded.__dict__),
+        "z_buffer": z_buffer(properties.get("NiZBufferProperty")),
         "two_sided": two_sided(properties.get("NiStencilProperty")),
         "vertex_colour": source,
         "lighting_mode": lighting_mode(properties.get("NiVertexColorProperty")),
