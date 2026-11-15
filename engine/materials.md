@@ -8,7 +8,7 @@ NiVertexColorProperty `vertex_mode` and `lighting_mode` are written only up to N
 
 NiSpecularProperty's constructor sets `m_uFlags = 0`: absent means off — NiSpecularProperty::NiSpecularProperty @59e7f0 decomp
 
-NiZBufferProperty's default is test on, write on, LESS_EQUAL — NiZBufferProperty::NiZBufferProperty @4456e0 decomp
+NiZBufferProperty's default is test on, write on, LESS_EQUAL (`m_uFlags = 0xf`) — NiZBufferProperty::NiZBufferProperty @54d820 dc
 
 TexDesc `Flags` packs the UV set (`Texture Index`), the filter mode and the clamp mode — TexturingMapFlags nif
 
