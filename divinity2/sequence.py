@@ -137,6 +137,8 @@ def _node(node, parent: int, path: str) -> dict:
                      [float(r.m_31), float(r.m_32), float(r.m_33)]],
         "scale": float(node.scale), "flags": int(node.flags), "culled": bool(lod.is_culled(node)),
     }
+    if out["type"] == "NiSortAdjustNode":
+        out["sorting"] = str(node.sorting_mode.name)
     if out["type"] == "NiBillboardNode":
         out["billboard"] = int(getattr(node, "billboard_mode", 0)) & 7
     extra = {str(e.name): float(e.float_data) for e in (getattr(node, "extra_data_list", ()) or ())
