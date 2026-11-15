@@ -49,13 +49,6 @@ def alpha(block) -> Alpha:
     )
 
 
-def z_buffer(block) -> dict | None:
-    if block is None:
-        return None
-    return {"test": bool(block.flags.z_buffer_test), "write": bool(block.flags.z_buffer_write),
-            "function": str(block.flags.test_func.name)}
-
-
 DEFAULT_VERTEX_COLOUR_FLAGS = 8
 
 LIGHT_EMISSIVE = 0
